@@ -21,6 +21,7 @@ bool render_resize(
     struct terminal *term, int width, int height, uint8_t resize_options);
 
 void render_refresh(struct terminal *term);
+void render_refresh_full(struct terminal *term);
 void render_refresh_tab_bar(struct wl_window *win);
 void render_flush_pending_resize(struct terminal *term);
 void render_refresh_app_id(struct terminal *term);

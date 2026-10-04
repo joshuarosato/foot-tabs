@@ -534,6 +534,15 @@ execute_binding(struct seat *seat, struct terminal *term,
         tab_rename_start(term);
         return true;
 
+    case BIND_ACTION_TRANSPARENCY_TOGGLE: {
+        /* Window-wide, i.e. affects all tabs */
+        struct wl_window *win = term->window;
+        win->force_opaque = !win->force_opaque;
+        wayl_win_alpha_changed(win);
+        render_refresh_full(term);
+        return true;
+    }
+
     case BIND_ACTION_TAB_GOTO_1:
     case BIND_ACTION_TAB_GOTO_2:
     case BIND_ACTION_TAB_GOTO_3:

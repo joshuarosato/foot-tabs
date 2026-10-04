@@ -1544,6 +1544,11 @@ e.g. *search-start=none*.
 	
 	Default: _none_
 
+*transparency-toggle*
+	Toggles transparency on and off, for all tabs in the window. Only
+	has an effect if the background is transparent (see *alpha* in
+	the *colors-dark* and *colors-light* sections). Default: _none_.
+
 *quit*
 	Quit foot, closing all tabs in the window (see *confirm-close* in
 	the *tabs* section). Default: _none_.

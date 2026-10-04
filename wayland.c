@@ -2631,7 +2631,7 @@ wayl_win_alpha_changed(struct wl_window *win)
      * When fullscreened, transparency is disabled (see render.c).
      * Update the opaque region to match.
      */
-    const bool is_opaque = term->colors.alpha == 0xffff || win->is_fullscreen;
+    const bool is_opaque = term->colors.alpha == 0xffff || wayl_win_ignore_alpha(win);
 
     if (is_opaque) {
         struct wl_region *region = wl_compositor_create_region(wayl->compositor);

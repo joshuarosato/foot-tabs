@@ -16,7 +16,6 @@
 #include "input.h"
 #include "render.h"
 #include "search.h"
-#include "shm.h"
 #include "terminal.h"
 #include "url-mode.h"
 #include "util.h"
@@ -178,13 +177,8 @@ tab_activate(struct terminal *new)
     if (new->shutdown.in_progress)
         return;
 
-    /* The window surface holds the previous tab's content; force a
-     * full repaint */
-    render_wait_for_preapply_damage(new);
-    shm_unref(new->render.last_buf);
-    new->render.last_buf = NULL;
-    term_damage_view(new);
-    render_refresh(new);
+    /* The window surface holds the previous tab's content */
+    render_refresh_full(new);
     render_refresh_csd(new);
     render_refresh_title(new);
     render_refresh_app_id(new);

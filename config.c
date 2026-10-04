@@ -193,6 +193,7 @@ static const char *const binding_action_map[] = {
     [BIND_ACTION_TAB_MOVE_LEFT] = "tab-move-left",
     [BIND_ACTION_TAB_MOVE_RIGHT] = "tab-move-right",
     [BIND_ACTION_TAB_RENAME] = "tab-rename",
+    [BIND_ACTION_TRANSPARENCY_TOGGLE] = "transparency-toggle",
     [BIND_ACTION_TAB_GOTO_1] = "tab-goto-1",
     [BIND_ACTION_TAB_GOTO_2] = "tab-goto-2",
     [BIND_ACTION_TAB_GOTO_3] = "tab-goto-3",

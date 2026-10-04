@@ -784,7 +784,7 @@ render_cell(struct terminal *term, pixman_image_t *pix,
             _bg = swap;
         }
 
-        else if (!term->window->is_fullscreen && term->colors.alpha != 0xffff) {
+        else if (!wayl_win_ignore_alpha(term->window) && term->colors.alpha != 0xffff) {
             switch (term->conf->colors_dark.alpha_mode) {
             case ALPHA_MODE_DEFAULT: {
                 if (cell->attrs.bg_src == COLOR_DEFAULT) {
@@ -1253,7 +1253,7 @@ render_margin(struct terminal *term, struct buffer *buf,
     const uint32_t _bg = !term->reverse ? term->colors.bg : term->colors.fg;
     uint16_t alpha = term->colors.alpha;
 
-    if (term->window->is_fullscreen) {
+    if (wayl_win_ignore_alpha(term->window)) {
         /* Disable alpha in fullscreen - see render_cell() for details */
         alpha = 0xffff;
     }
@@ -5630,6 +5630,17 @@ void
 render_refresh(struct terminal *term)
 {
     term->render.refresh.grid = true;
+}
+
+/* Repaints everything in the next frame, not just damaged cells */
+void
+render_refresh_full(struct terminal *term)
+{
+    render_wait_for_preapply_damage(term);
+    shm_unref(term->render.last_buf);
+    term->render.last_buf = NULL;
+    term_damage_view(term);
+    render_refresh(term);
 }
 
 void

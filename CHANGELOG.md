@@ -85,6 +85,8 @@
   double-click to rename, middle-click to close, and scroll to cycle
   tabs. A window
   can have at most 9 tabs.
+* `transparency-toggle` key binding (unbound by default), toggling
+  background transparency on and off, for all tabs in the window.
 * `[tabs]` section, with the options:
   - `confirm-close`: when enabled (the default), closing a window with
     more than one tab asks for confirmation. Previously named

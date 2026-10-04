@@ -408,6 +408,9 @@ struct wl_window {
     /* Asking the user to confirm closing a window with multiple tabs */
     bool confirm_close;
 
+    /* Transparency disabled by the user (transparency-toggle) */
+    bool force_opaque;
+
     struct wayl_sub_surface search;
     struct wayl_sub_surface scrollback_indicator;
     struct wayl_sub_surface render_timer;
@@ -566,6 +569,13 @@ void wayl_win_scale(struct wl_window *win, const struct buffer *buf);
 void wayl_win_alpha_changed(struct wl_window *win);
 bool wayl_win_set_urgent(struct wl_window *win);
 bool wayl_win_ring_bell(const struct wl_window *win);
+
+/* True when the background alpha should be ignored */
+static inline bool
+wayl_win_ignore_alpha(const struct wl_window *win)
+{
+    return win->is_fullscreen || win->force_opaque;
+}
 
 bool wayl_win_csd_titlebar_visible(const struct wl_window *win);
 bool wayl_win_csd_borders_visible(const struct wl_window *win);
