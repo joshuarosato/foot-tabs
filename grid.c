@@ -64,6 +64,17 @@ grid_sb_start_ignore_uninitialized(const struct grid *grid, int screen_rows)
     return scrollback_start;
 }
 
+void
+grid_sb_geometry(const struct grid *grid, int screen_rows,
+                 int *view_pos, int *total_rows)
+{
+    const int sb_start = grid_sb_start_ignore_uninitialized(grid, screen_rows);
+
+    *view_pos = grid_row_abs_to_sb_precalc_sb_start(grid, sb_start, grid->view);
+    *total_rows = grid_row_abs_to_sb_precalc_sb_start(
+        grid, sb_start, grid->offset) + screen_rows;
+}
+
 int
 grid_row_abs_to_sb_precalc_sb_start(const struct grid *grid, int sb_start,
                                     int abs_row)

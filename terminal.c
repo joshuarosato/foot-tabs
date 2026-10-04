@@ -1416,6 +1416,7 @@ term_init(const struct config *conf, struct fdm *fdm, struct reaper *reaper,
                 .csd = shm_chain_new(wayl, false, 1, desired_bit_depth, NULL, NULL),
                 .overlay = shm_chain_new(wayl, false, 1, desired_bit_depth, NULL, NULL),
                 .tab_bar = shm_chain_new(wayl, false, 1, desired_bit_depth, NULL, NULL),
+                .scrollbar = shm_chain_new(wayl, false, 1, desired_bit_depth, NULL, NULL),
             },
             .scrollback_lines = conf->scrollback.lines,
             .app_sync_updates.timer_fd = app_sync_updates_fd,
@@ -1975,6 +1976,7 @@ term_destroy(struct terminal *term)
     shm_chain_free(term->render.chains.csd);
     shm_chain_free(term->render.chains.overlay);
     shm_chain_free(term->render.chains.tab_bar);
+    shm_chain_free(term->render.chains.scrollbar);
     pixman_region32_fini(&term->render.last_overlay_clip);
 
     tll_free(term->tab_stops);
@@ -3703,6 +3705,7 @@ term_xcursor_update_for_seat(struct terminal *term, struct seat *seat)
     case TERM_SURF_BUTTON_MAXIMIZE:
     case TERM_SURF_BUTTON_CLOSE:
     case TERM_SURF_TAB_BAR:
+    case TERM_SURF_SCROLLBAR:
         shape = CURSOR_SHAPE_LEFT_PTR;
         break;
 
@@ -4530,6 +4533,8 @@ term_surface_kind(const struct terminal *term, const struct wl_surface *surface)
         return TERM_SURF_BUTTON_CLOSE;
     else if (surface == term->window->tab_bar.surface.surface.surf)
         return TERM_SURF_TAB_BAR;
+    else if (surface == term->window->scrollbar.surface.surface.surf)
+        return TERM_SURF_SCROLLBAR;
     else
         return TERM_SURF_NONE;
 }

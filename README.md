@@ -18,7 +18,12 @@ The fast, lightweight and minimalistic Wayland terminal emulator.
 > - Tab bar: click to switch, double-click to rename, middle-click to
 >   close, scroll to cycle
 > - Closing a window with several tabs asks for confirmation
->   (`confirm-close-tabs`)
+>   (`[tabs] confirm-close`)
+>
+> Other additions: an optional scrollbar (`[scrollback] scrollbar`),
+> confirmation before pasting multiple lines that would run as
+> commands (`[security] confirm-paste`), and a `transparency-toggle`
+> key binding.
 >
 > See `tab-*` in **foot.ini**(5) for all options. Arch Linux users can
 > install [`foot-tabs`](https://aur.archlinux.org/packages/foot-tabs) or

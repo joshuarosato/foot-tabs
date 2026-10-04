@@ -85,6 +85,9 @@
   double-click to rename, middle-click to close, and scroll to cycle
   tabs. A window
   can have at most 9 tabs.
+* Scrollbar: `scrollback.scrollbar=never|auto|always` (default
+  `never`), and `scrollback.scrollbar-width`. Drag or click the
+  scrollbar to scroll.
 * `security.confirm-paste` option. When pasting text with multiple
   lines, ask for confirmation before sending it: `never`, `unsafe`
   (the default; only when the application has not enabled bracketed

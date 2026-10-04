@@ -22,6 +22,19 @@ bool render_resize(
 
 void render_refresh(struct terminal *term);
 void render_refresh_full(struct terminal *term);
+
+/* Scrollbar geometry, in physical pixels, relative to the scrollbar */
+struct scrollbar_geometry {
+    int x, y;            /* Position, relative to the window */
+    int width, height;
+    int thumb_y, thumb_height;
+    int view_pos;        /* Viewport position in the scrollback */
+    int max_view_pos;    /* View position when at the bottom */
+};
+
+/* Returns false if the scrollbar should not be shown */
+bool render_scrollbar_geometry(
+    const struct terminal *term, struct scrollbar_geometry *g);
 void render_refresh_tab_bar(struct wl_window *win);
 void render_flush_pending_resize(struct terminal *term);
 void render_refresh_app_id(struct terminal *term);

@@ -1329,6 +1329,19 @@ parse_section_scrollback(struct context *ctx)
     else if (streq(key, "multiplier"))
         return value_to_float(ctx, &conf->scrollback.multiplier);
 
+    else if (streq(key, "scrollbar")) {
+        _Static_assert(sizeof(conf->scrollback.scrollbar) == sizeof(int),
+            "enum is not 32-bit");
+
+        return value_to_enum(
+            ctx,
+            (const char *[]){"never", "auto", "always", NULL},
+            (int *)&conf->scrollback.scrollbar);
+    }
+
+    else if (streq(key, "scrollbar-width"))
+        return value_to_uint16(ctx, 10, &conf->scrollback.scrollbar_width);
+
     else {
         LOG_CONTEXTUAL_ERR("not a valid option: %s", key);
         return false;
@@ -3657,6 +3670,8 @@ config_load(struct config *conf, const char *conf_path,
                 .text = xc32dup(U""),
             },
             .multiplier = 3.,
+            .scrollbar = SCROLLBAR_NEVER,
+            .scrollbar_width = 8,
         },
         .colors_dark = {
             .fg = default_foreground,

@@ -411,6 +411,19 @@ struct wl_window {
     /* Transparency disabled by the user (transparency-toggle) */
     bool force_opaque;
 
+    struct {
+        struct wayl_sub_surface surface;
+        bool visible;
+
+        /* Dragging the thumb, with the pointer this far into it */
+        bool dragging;
+        int drag_offset;
+
+        /* Last rendered state; to skip re-rendering when unchanged */
+        int x, y, width, height, thumb_y, thumb_height;
+        uint32_t track_color, thumb_color;
+    } scrollbar;
+
     struct wayl_sub_surface search;
     struct wayl_sub_surface scrollback_indicator;
     struct wayl_sub_surface render_timer;

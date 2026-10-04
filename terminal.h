@@ -363,6 +363,7 @@ enum term_surface {
     TERM_SURF_BUTTON_MAXIMIZE,
     TERM_SURF_BUTTON_CLOSE,
     TERM_SURF_TAB_BAR,
+    TERM_SURF_SCROLLBAR,
 };
 
 enum overlay_style {
@@ -674,6 +675,7 @@ struct terminal {
             struct buffer_chain *csd;
             struct buffer_chain *overlay;
             struct buffer_chain *tab_bar;
+            struct buffer_chain *scrollbar;
         } chains;
 
         /* Scheduled for rendering, as soon-as-possible */

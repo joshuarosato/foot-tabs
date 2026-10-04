@@ -3461,6 +3461,132 @@ render_confirm_box(struct terminal *term, struct buffer *buf)
     pixman_image_set_clip_region32(pix, NULL);
 }
 
+bool
+render_scrollbar_geometry(const struct terminal *term,
+                          struct scrollbar_geometry *g)
+{
+    const struct wl_window *win = term->window;
+    const float scale = term->scale;
+
+    if (term->conf->scrollback.scrollbar == SCROLLBAR_NEVER)
+        return false;
+
+    /* The alternate screen has no scrollback */
+    if (term->grid == &term->alt || term->rows <= 0)
+        return false;
+
+    if (term->conf->scrollback.scrollbar == SCROLLBAR_AUTO &&
+        term->grid->view == term->grid->offset &&
+        !win->scrollbar.dragging)
+    {
+        /* Only shown while scrolled back */
+        return false;
+    }
+
+    int total_rows;
+    grid_sb_geometry(term->grid, term->rows, &g->view_pos, &total_rows);
+    g->max_view_pos = max(0, total_rows - term->rows);
+
+    /* Sizes and positions must be in whole logical pixels */
+    g->width = roundf(scale * max(1, term->conf->scrollback.scrollbar_width));
+    g->height = roundf(scale * floorf(term->rows * term->cell_height / scale));
+    g->x = term->width - g->width;
+    g->y = roundf(scale * roundf(term->margins.top / scale));
+
+    if (g->width <= 0 || g->height <= 0 || g->x < 0)
+        return false;
+
+    /* The thumb's size is the visible part of the scrollback */
+    const int min_thumb = min(g->height, max(2 * g->width, term->cell_height));
+    g->thumb_height = total_rows > term->rows
+        ? max(min_thumb, (int)((int64_t)g->height * term->rows / total_rows))
+        : g->height;
+
+    g->thumb_y = g->max_view_pos > 0
+        ? (int)((int64_t)(g->height - g->thumb_height) * g->view_pos / g->max_view_pos)
+        : 0;
+
+    return true;
+}
+
+static void
+render_scrollbar(struct terminal *term)
+{
+    struct wl_window *win = term->window;
+    __typeof__(win->scrollbar) *sb = &win->scrollbar;
+
+    struct scrollbar_geometry g;
+    if (!render_scrollbar_geometry(term, &g)) {
+        if (sb->visible) {
+            wl_surface_attach(sb->surface.surface.surf, NULL, 0, 0);
+            wl_surface_commit(sb->surface.surface.surf);
+            sb->visible = false;
+        }
+        return;
+    }
+
+    if (sb->surface.surface.surf == NULL &&
+        !wayl_win_subsurface_new(win, &sb->surface, true))
+    {
+        LOG_ERR("failed to create scrollbar surface");
+        return;
+    }
+
+    /* Only the thumb is drawn in 'auto' mode; 'always' also shows the track */
+    const uint32_t _bg = term->colors.bg;
+    const uint32_t _fg = term->colors.fg;
+    const uint32_t track_color =
+        term->conf->scrollback.scrollbar == SCROLLBAR_ALWAYS
+            ? 0xffu << 24 | color_blend_towards(_bg, _fg, 0.08) : 0;
+    const uint32_t thumb_color = 0xffu << 24 |
+        color_blend_towards(_bg, _fg, sb->dragging ? 0.7 : 0.45);
+
+    if (sb->visible &&
+        sb->x == g.x && sb->y == g.y &&
+        sb->width == g.width && sb->height == g.height &&
+        sb->thumb_y == g.thumb_y && sb->thumb_height == g.thumb_height &&
+        sb->track_color == track_color && sb->thumb_color == thumb_color)
+    {
+        return;
+    }
+
+    struct buffer *buf = shm_get_buffer(
+        term->render.chains.scrollbar, g.width, g.height);
+    pixman_image_t *pix = buf->pix[0];
+
+    const bool gamma_correct = wayl_do_linear_blending(term->wl, term->conf);
+    const pixman_color_t track = color_hex_to_pixman_with_alpha(
+        track_color, track_color >> 24 | (track_color >> 24 << 8), gamma_correct);
+    const pixman_color_t thumb = color_hex_to_pixman(thumb_color, gamma_correct);
+
+    pixman_image_fill_rectangles(
+        PIXMAN_OP_SRC, pix, &track, 1,
+        &(pixman_rectangle16_t){0, 0, g.width, g.height});
+
+    const int inset = g.width / 4;
+    pixman_image_fill_rectangles(
+        PIXMAN_OP_SRC, pix, &thumb, 1,
+        &(pixman_rectangle16_t){
+            inset, g.thumb_y, max(1, g.width - 2 * inset), g.thumb_height});
+
+    wl_subsurface_set_position(
+        sb->surface.sub, roundf(g.x / term->scale), roundf(g.y / term->scale));
+    wayl_surface_scale(win, &sb->surface.surface, buf, term->scale);
+    wl_surface_attach(sb->surface.surface.surf, buf->wl_buf, 0, 0);
+    wl_surface_damage_buffer(sb->surface.surface.surf, 0, 0, g.width, g.height);
+    wl_surface_commit(sb->surface.surface.surf);
+
+    sb->visible = true;
+    sb->x = g.x;
+    sb->y = g.y;
+    sb->width = g.width;
+    sb->height = g.height;
+    sb->thumb_y = g.thumb_y;
+    sb->thumb_height = g.thumb_height;
+    sb->track_color = track_color;
+    sb->thumb_color = thumb_color;
+}
+
 static void
 render_render_timer(struct terminal *term, struct timespec render_time)
 {
@@ -3939,6 +4065,8 @@ grid_render(struct terminal *term)
         term->window->tab_bar.dirty = false;
         render_tab_bar(term);
     }
+
+    render_scrollbar(term);
 
     if (term->conf->tweak.render_timer != RENDER_TIMER_NONE) {
         struct timespec end_time;
@@ -5860,4 +5988,65 @@ render_buffer_release_callback(struct buffer *buf, void *data)
     xassert(tll_length(term->render.workers.queue) == 0);
     tll_push_back(term->render.workers.queue, -3);
     mtx_unlock(&term->render.workers.lock);
+}
+
+UNITTEST
+{
+    /* Scrollbar geometry */
+    struct config conf = {0};
+    struct wl_window win = {0};
+    struct row dummy_row = {0};
+    struct row *rows[16] = {NULL};
+
+    /* 12 populated rows: 8 rows of scrollback, then the 4 screen rows */
+    for (int i = 0; i < 12; i++)
+        rows[i] = &dummy_row;
+
+    struct terminal term = {
+        .conf = &conf,
+        .window = &win,
+        .scale = 1.,
+        .width = 100,
+        .rows = 4,
+        .cell_height = 10,
+        .normal = {.num_rows = 16, .offset = 8, .view = 8, .rows = rows},
+    };
+    term.grid = &term.normal;
+    conf.scrollback.scrollbar_width = 8;
+
+    struct scrollbar_geometry g;
+
+    conf.scrollback.scrollbar = SCROLLBAR_NEVER;
+    xassert(!render_scrollbar_geometry(&term, &g));
+
+    /* 'auto' is hidden at the bottom, shown when scrolled back */
+    conf.scrollback.scrollbar = SCROLLBAR_AUTO;
+    xassert(!render_scrollbar_geometry(&term, &g));
+    term.normal.view = 4;
+    xassert(render_scrollbar_geometry(&term, &g));
+
+    conf.scrollback.scrollbar = SCROLLBAR_ALWAYS;
+
+    /* At the bottom: thumb at the bottom of the track */
+    term.normal.view = 8;
+    xassert(render_scrollbar_geometry(&term, &g));
+    xassert(g.x == 92 && g.width == 8);
+    xassert(g.height == 40);
+    xassert(g.view_pos == 8 && g.max_view_pos == 8);
+    xassert(g.thumb_height == 16);  /* 4/12 of 40 is 13, but min is 2*width */
+    xassert(g.thumb_y == 40 - 16);
+
+    /* At the top of the scrollback */
+    term.normal.view = 0;
+    xassert(render_scrollbar_geometry(&term, &g));
+    xassert(g.view_pos == 0 && g.thumb_y == 0);
+
+    /* Halfway */
+    term.normal.view = 4;
+    xassert(render_scrollbar_geometry(&term, &g));
+    xassert(g.view_pos == 4 && g.thumb_y == (40 - 16) / 2);
+
+    /* No scrollback on the alternate screen */
+    term.grid = &term.alt;
+    xassert(!render_scrollbar_geometry(&term, &g));
 }

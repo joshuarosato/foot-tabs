@@ -867,6 +867,31 @@ xdgtoken=95ebdfe56e4f47ddb5bba9d7dc3a2c35
 	Amount to multiply mouse scrolling with. It is a decimal number,
 	i.e. fractions are allowed. Default: _3.0_.
 
+*scrollbar*
+	Whether to show a scrollbar along the right edge of the window.
+	One of:
+	
+	- *never*: no scrollbar.
+	- *auto*: only show the scrollbar while scrolled back in the
+	  scrollback history.
+	- *always*: always show the scrollbar (except in applications
+	  using the alternate screen, such as full-screen editors, since
+	  they have no scrollback).
+	
+	Drag the scrollbar to scroll, or click it to jump to that
+	position. Scrolling the mouse wheel over the scrollbar always
+	scrolls the scrollback, even if the application has enabled
+	mouse reporting.
+	
+	The scrollbar is drawn on top of the terminal's right edge. To
+	avoid it covering text, configure a right padding at least as
+	wide as the scrollbar (see *pad*).
+	
+	Default: _never_.
+
+*scrollbar-width*
+	Width of the scrollbar, in logical pixels. Default: _8_.
+
 *indicator-position*
 	Configures the style of the scrollback position indicator. One of
 	*none*, *fixed* or *relative*. *none* disables the indicator

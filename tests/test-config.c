@@ -603,6 +603,15 @@ test_section_scrollback(void)
     test_uint32(&ctx, &parse_section_scrollback, "lines",
                 &conf.scrollback.lines);
     test_float(&ctx, parse_section_scrollback, "multiplier", &conf.scrollback.multiplier);
+    test_uint16(&ctx, &parse_section_scrollback, "scrollbar-width",
+                &conf.scrollback.scrollbar_width);
+
+    test_enum(
+        &ctx, &parse_section_scrollback, "scrollbar",
+        3,
+        (const char *[]){"never", "auto", "always"},
+        (int []){SCROLLBAR_NEVER, SCROLLBAR_AUTO, SCROLLBAR_ALWAYS},
+        (int *)&conf.scrollback.scrollbar);
 
     test_enum(
         &ctx, &parse_section_scrollback, "indicator-position",

@@ -333,6 +333,13 @@ struct config {
             char32_t *text;
         } indicator;
         float multiplier;
+
+        enum {
+            SCROLLBAR_NEVER,
+            SCROLLBAR_AUTO,
+            SCROLLBAR_ALWAYS,
+        } scrollbar;
+        uint16_t scrollbar_width;
     } scrollback;
 
     struct {

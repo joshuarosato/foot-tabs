@@ -2588,6 +2588,7 @@ wl_pointer_enter(void *data, struct wl_pointer *wl_pointer,
     case TERM_SURF_BORDER_TOP:
     case TERM_SURF_BORDER_BOTTOM:
     case TERM_SURF_TAB_BAR:
+    case TERM_SURF_SCROLLBAR:
         break;
 
     case TERM_SURF_BUTTON_MINIMIZE:
@@ -2689,6 +2690,13 @@ wl_pointer_leave(void *data, struct wl_pointer *wl_pointer,
         case TERM_SURF_BORDER_BOTTOM:
         case TERM_SURF_TAB_BAR:
             break;
+
+        case TERM_SURF_SCROLLBAR:
+            if (old_moused->window != NULL && old_moused->window->scrollbar.dragging) {
+                old_moused->window->scrollbar.dragging = false;
+                render_refresh(old_moused);
+            }
+            break;
         }
 
     }
@@ -2711,6 +2719,31 @@ pointer_is_on_button(const struct terminal *term, const struct seat *seat,
         return false;
 
     return true;
+}
+
+/*
+ * Scrolls, such that the scrollbar thumb's top edge ends up at 'y'
+ * minus the offset at which the thumb was grabbed.
+ */
+static void
+scrollbar_drag_to(struct terminal *term, int y)
+{
+    struct scrollbar_geometry g;
+    if (!render_scrollbar_geometry(term, &g) || g.max_view_pos <= 0)
+        return;
+
+    const int range = g.height - g.thumb_height;
+    if (range <= 0)
+        return;
+
+    const int top = max(0, min(range, y - term->window->scrollbar.drag_offset));
+    const int target = (int)round((double)top * g.max_view_pos / range);
+    const int delta = target - g.view_pos;
+
+    if (delta < 0)
+        cmd_scrollback_up(term, -delta);
+    else if (delta > 0)
+        cmd_scrollback_down(term, delta);
 }
 
 static void
@@ -2773,6 +2806,7 @@ wl_pointer_motion(void *data, struct wl_pointer *wl_pointer,
     case TERM_SURF_BORDER_TOP:
     case TERM_SURF_BORDER_BOTTOM:
     case TERM_SURF_TAB_BAR:
+    case TERM_SURF_SCROLLBAR:
         break;
     }
 
@@ -2829,6 +2863,11 @@ wl_pointer_motion(void *data, struct wl_pointer *wl_pointer,
         /* Dragging a tab (it was activated when the button was pressed) */
         if (button == BTN_LEFT)
             tab_drag(win, seat->mouse.x);
+        break;
+
+    case TERM_SURF_SCROLLBAR:
+        if (button == BTN_LEFT && win->scrollbar.dragging)
+            scrollbar_drag_to(term, seat->mouse.y);
         break;
 
     case TERM_SURF_GRID: {
@@ -3329,6 +3368,35 @@ wl_pointer_button(void *data, struct wl_pointer *wl_pointer,
         }
         break;
 
+    case TERM_SURF_SCROLLBAR: {
+        if (button != BTN_LEFT)
+            break;
+
+        struct wl_window *win = term->window;
+
+        if (state == WL_POINTER_BUTTON_STATE_PRESSED) {
+            struct scrollbar_geometry g;
+            if (!render_scrollbar_geometry(term, &g))
+                break;
+
+            /* Grab the thumb where it was clicked, or, when clicking
+             * the track, jump so that the thumb is centered there */
+            const int y = seat->mouse.y;
+            const bool on_thumb =
+                y >= g.thumb_y && y < g.thumb_y + g.thumb_height;
+
+            win->scrollbar.drag_offset =
+                on_thumb ? y - g.thumb_y : g.thumb_height / 2;
+            win->scrollbar.dragging = true;
+            scrollbar_drag_to(term, y);
+        } else {
+            win->scrollbar.dragging = false;
+        }
+
+        render_refresh(term);
+        break;
+    }
+
     case TERM_SURF_TAB_BAR: {
         if (state != WL_POINTER_BUTTON_STATE_PRESSED)
             break;
@@ -3438,6 +3506,18 @@ mouse_scroll(struct seat *seat, int amount, enum wl_pointer_axis axis)
 {
     struct terminal *term = seat->mouse_focus;
     xassert(term != NULL);
+
+    if (term->active_surface == TERM_SURF_SCROLLBAR) {
+        /* Always scrolls the scrollback, even if the client has
+         * enabled mouse reporting */
+        if (axis == WL_POINTER_AXIS_VERTICAL_SCROLL) {
+            if (amount < 0)
+                cmd_scrollback_up(term, -amount);
+            else
+                cmd_scrollback_down(term, amount);
+        }
+        return;
+    }
 
     int button = axis == WL_POINTER_AXIS_VERTICAL_SCROLL
         ? amount < 0 ? BTN_WHEEL_BACK : BTN_WHEEL_FORWARD
