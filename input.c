@@ -522,6 +522,18 @@ execute_binding(struct seat *seat, struct terminal *term,
         tab_cycle(term->window, -1);
         return true;
 
+    case BIND_ACTION_TAB_MOVE_LEFT:
+        tab_move(term->window, -1);
+        return true;
+
+    case BIND_ACTION_TAB_MOVE_RIGHT:
+        tab_move(term->window, 1);
+        return true;
+
+    case BIND_ACTION_TAB_RENAME:
+        tab_rename_start(term);
+        return true;
+
     case BIND_ACTION_TAB_GOTO_1:
     case BIND_ACTION_TAB_GOTO_2:
     case BIND_ACTION_TAB_GOTO_3:
@@ -1678,6 +1690,16 @@ key_press_release(struct seat *seat, struct terminal *term, uint32_t serial,
     if (term->unicode_mode.active) {
         if (pressed)
             unicode_mode_input(seat, term, sym);
+        return;
+    }
+
+    else if (term->tab.rename.active) {
+        if (pressed) {
+            if (should_repeat)
+                start_repeater(seat, key);
+
+            tab_rename_input(seat, term, key, sym);
+        }
         return;
     }
 
@@ -3279,17 +3301,35 @@ wl_pointer_button(void *data, struct wl_pointer *wl_pointer,
         }
         break;
 
-    case TERM_SURF_TAB_BAR:
-        if (button == BTN_LEFT && state == WL_POINTER_BUTTON_STATE_PRESSED) {
-            const int idx = tab_bar_tab_at(term->window, seat->mouse.x);
-            if (idx >= 0)
-                tab_activate_index(term->window, idx);
-        }
+    case TERM_SURF_TAB_BAR: {
+        if (state != WL_POINTER_BUTTON_STATE_PRESSED)
+            break;
+
+        struct wl_window *win = term->window;
+        const int idx = tab_bar_tab_at(win, seat->mouse.x);
+        struct terminal *tab = idx >= 0 ? tab_at_index(win, idx) : NULL;
+
+        if (tab == NULL)
+            break;
+
+        if (button == BTN_LEFT) {
+            /* Double-clicking the active tab renames it */
+            const bool was_active = tab == win->term;
+            tab_activate(tab);
+
+            if (was_active && seat->mouse.count == 2)
+                tab_rename_start(tab);
+        } else if (button == BTN_MIDDLE)
+            term_shutdown(tab);
         break;
+    }
 
     case TERM_SURF_GRID: {
         search_cancel(term);
         urls_reset(term);
+
+        if (term->tab.rename.active)
+            tab_rename_commit(term);
 
         bool cursor_is_on_grid = seat->mouse.col >= 0 && seat->mouse.row >= 0;
 
@@ -3370,6 +3410,12 @@ mouse_scroll(struct seat *seat, int amount, enum wl_pointer_axis axis)
 {
     struct terminal *term = seat->mouse_focus;
     xassert(term != NULL);
+
+    if (term->active_surface == TERM_SURF_TAB_BAR) {
+        if (amount != 0)
+            tab_cycle(term->window, amount > 0 ? 1 : -1);
+        return;
+    }
 
     int button = axis == WL_POINTER_AXIS_VERTICAL_SCROLL
         ? amount < 0 ? BTN_WHEEL_BACK : BTN_WHEEL_FORWARD

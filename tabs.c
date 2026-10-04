@@ -4,9 +4,12 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#include <xkbcommon/xkbcommon-compose.h>
+
 #define LOG_MODULE "tabs"
 #define LOG_ENABLE_DBG 0
 #include "log.h"
+#include "char32.h"
 #include "config.h"
 #include "debug.h"
 #include "ime.h"
@@ -18,6 +21,7 @@
 #include "url-mode.h"
 #include "util.h"
 #include "wayland.h"
+#include "xmalloc.h"
 
 static void
 tab_shutdown_cb(void *data, int exit_code)
@@ -124,6 +128,8 @@ tab_activate(struct terminal *new)
     const float logical_height = old->scale > 0. ? old->height / old->scale : 0.;
 
     /* These modes use window-global surfaces */
+    if (old->tab.rename.active)
+        tab_rename_cancel(old);
     render_flush_pending_resize(old);
     if (old->is_searching)
         search_cancel(old);
@@ -163,16 +169,213 @@ tab_activate(struct terminal *new)
     }
 }
 
-void
-tab_activate_index(struct wl_window *win, size_t idx)
+struct terminal *
+tab_at_index(const struct wl_window *win, size_t idx)
 {
     size_t i = 0;
     tll_foreach(win->tabs, it) {
-        if (i++ == idx) {
-            tab_activate(it->item);
-            return;
-        }
+        if (i++ == idx)
+            return it->item;
     }
+    return NULL;
+}
+
+void
+tab_activate_index(struct wl_window *win, size_t idx)
+{
+    struct terminal *tab = tab_at_index(win, idx);
+    if (tab != NULL)
+        tab_activate(tab);
+}
+
+void
+tab_move(struct wl_window *win, int direction)
+{
+    tll_foreach(win->tabs, it) {
+        if (it->item != win->term)
+            continue;
+
+        /* Doesn't wrap around */
+        __typeof__(it) other = direction < 0 ? it->prev : it->next;
+        if (other == NULL)
+            return;
+
+        it->item = other->item;
+        other->item = win->term;
+        render_refresh_tab_bar(win);
+        return;
+    }
+}
+
+const char *
+tab_title(const struct terminal *term)
+{
+    if (term->tab.title != NULL)
+        return term->tab.title;
+    return term->window_title != NULL ? term->window_title : "foot";
+}
+
+static void
+rename_append(struct terminal *term, char32_t wc)
+{
+    static const size_t max_len = 256;
+    __typeof__(term->tab.rename) *r = &term->tab.rename;
+
+    if (r->len >= max_len)
+        return;
+
+    if (r->len + 1 >= r->sz) {
+        r->sz = r->sz == 0 ? 64 : r->sz * 2;
+        r->buf = xrealloc(r->buf, r->sz * sizeof(r->buf[0]));
+    }
+
+    r->buf[r->len++] = wc;
+    r->buf[r->len] = U'\0';
+}
+
+static void
+rename_end(struct terminal *term)
+{
+    __typeof__(term->tab.rename) *r = &term->tab.rename;
+
+    free(r->buf);
+    r->buf = NULL;
+    r->len = r->sz = 0;
+    r->active = false;
+
+    /* A single tab's bar was only shown while renaming */
+    render_refresh_tab_bar(term->window);
+}
+
+void
+tab_rename_start(struct terminal *term)
+{
+    __typeof__(term->tab.rename) *r = &term->tab.rename;
+
+    if (r->active || term->shutdown.in_progress)
+        return;
+
+    if (term->is_searching)
+        search_cancel(term);
+    urls_reset(term);
+
+    r->active = true;
+
+    /* Start with the current label, so that it can be edited */
+    const char *title = term->tab.title != NULL
+        ? term->tab.title : term->window_title;
+    char32_t *wcs = ambstoc32(title);
+
+    if (wcs != NULL) {
+        for (const char32_t *wc = wcs; *wc != U'\0'; wc++)
+            rename_append(term, *wc);
+        free(wcs);
+    }
+
+    render_refresh_tab_bar(term->window);
+}
+
+void
+tab_rename_commit(struct terminal *term)
+{
+    __typeof__(term->tab.rename) *r = &term->tab.rename;
+    xassert(r->active);
+
+    free(term->tab.title);
+    term->tab.title = r->len > 0 ? ac32tombs(r->buf) : NULL;
+    rename_end(term);
+}
+
+void
+tab_rename_cancel(struct terminal *term)
+{
+    xassert(term->tab.rename.active);
+    rename_end(term);
+}
+
+void
+tab_rename_input(struct seat *seat, struct terminal *term, uint32_t key,
+                 xkb_keysym_t sym)
+{
+    __typeof__(term->tab.rename) *r = &term->tab.rename;
+    xassert(r->active);
+
+    switch (sym) {
+    case XKB_KEY_Return:
+    case XKB_KEY_KP_Enter:
+        tab_rename_commit(term);
+        return;
+
+    case XKB_KEY_Escape:
+        tab_rename_cancel(term);
+        return;
+
+    case XKB_KEY_BackSpace:
+        if (seat->kbd.ctrl) {
+            /* Delete previous word */
+            while (r->len > 0 && r->buf[r->len - 1] == U' ')
+                r->len--;
+            while (r->len > 0 && r->buf[r->len - 1] != U' ')
+                r->len--;
+        } else if (r->len > 0)
+            r->len--;
+
+        if (r->buf != NULL)
+            r->buf[r->len] = U'\0';
+        render_refresh_tab_bar(term->window);
+        return;
+    }
+
+    if (seat->kbd.ctrl) {
+        switch (sym) {
+        case XKB_KEY_u:
+            /* Clear */
+            r->len = 0;
+            if (r->buf != NULL)
+                r->buf[0] = U'\0';
+            render_refresh_tab_bar(term->window);
+            break;
+
+        case XKB_KEY_c:
+        case XKB_KEY_g:
+            tab_rename_cancel(term);
+            break;
+        }
+
+        /* Ignore all other control sequences */
+        return;
+    }
+
+    struct xkb_compose_state *compose = seat->kbd.xkb_compose_state;
+    const enum xkb_compose_status compose_status = compose != NULL
+        ? xkb_compose_state_get_status(compose)
+        : XKB_COMPOSE_NOTHING;
+
+    char buf[64] = {0};
+    int count = 0;
+
+    if (compose_status == XKB_COMPOSE_COMPOSED) {
+        count = xkb_compose_state_get_utf8(compose, buf, sizeof(buf));
+        xkb_compose_state_reset(compose);
+    } else if (compose_status == XKB_COMPOSE_NOTHING)
+        count = xkb_state_key_get_utf8(seat->kbd.xkb_state, key, buf, sizeof(buf));
+
+    if (count <= 0 || count >= (int)sizeof(buf))
+        return;
+
+    char32_t *wcs = ambstoc32(buf);
+    if (wcs == NULL)
+        return;
+
+    for (const char32_t *wc = wcs; *wc != U'\0'; wc++) {
+        /* Skip control characters */
+        if (*wc < 0x20 || (*wc >= 0x7f && *wc < 0xa0))
+            continue;
+        rename_append(term, *wc);
+    }
+
+    free(wcs);
+    render_refresh_tab_bar(term->window);
 }
 
 void
@@ -258,12 +461,22 @@ tab_bar_visible(const struct wl_window *win)
     return tll_length(win->tabs) > 1;
 }
 
+bool
+tab_bar_shown(const struct wl_window *win)
+{
+    return tab_bar_visible(win) || win->term->tab.rename.active;
+}
+
+int
+tab_bar_strip_height(const struct terminal *term)
+{
+    return roundf(term->conf->csd.title_height * term->scale);
+}
+
 int
 tab_bar_height(const struct terminal *term)
 {
-    if (!tab_bar_visible(term->window))
-        return 0;
-    return roundf(term->conf->csd.title_height * term->scale);
+    return tab_bar_visible(term->window) ? tab_bar_strip_height(term) : 0;
 }
 
 void

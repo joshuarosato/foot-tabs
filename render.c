@@ -3153,13 +3153,76 @@ render_scrollback_position(struct terminal *term)
         width - margin - c32len(text) * term->cell_width);
 }
 
+static int
+glyph_advance(const struct terminal *term, struct fcft_font *font, char32_t wc)
+{
+    const struct fcft_glyph *glyph =
+        fcft_rasterize_char_utf32(font, wc, term->font_subpixel);
+    return glyph != NULL ? glyph->advance.x : 0;
+}
+
+/*
+ * Returns a copy of 'text', truncated with an ellipsis if it doesn't
+ * fit in 'max_width'. Text is removed from the end, or, if 'keep_end'
+ * is set, from the beginning. '*width' is set to the width of the
+ * returned text.
+ *
+ * Note: widths are based on glyph advances, and ignores shaping.
+ */
+static char32_t *
+ellipsize(const struct terminal *term, struct fcft_font *font,
+          const char32_t *text, int max_width, bool keep_end, int *width)
+{
+    const size_t len = c32len(text);
+
+    int total = 0;
+    for (size_t i = 0; i < len; i++)
+        total += glyph_advance(term, font, text[i]);
+
+    if (total <= max_width) {
+        *width = total;
+        return c32dup(text);
+    }
+
+    const int ellipsis_width = glyph_advance(term, font, U'…');
+    const int avail = max_width - ellipsis_width;
+
+    int used = 0;
+    size_t count = 0;
+
+    while (count < len) {
+        const char32_t wc = keep_end ? text[len - 1 - count] : text[count];
+        const int w = glyph_advance(term, font, wc);
+
+        if (used + w > avail)
+            break;
+
+        used += w;
+        count++;
+    }
+
+    char32_t *ret = xmalloc((count + 2) * sizeof(ret[0]));
+
+    if (keep_end) {
+        ret[0] = U'…';
+        memcpy(&ret[1], &text[len - count], count * sizeof(ret[0]));
+    } else {
+        memcpy(ret, text, count * sizeof(ret[0]));
+        ret[count] = U'…';
+    }
+
+    ret[count + 1] = U'\0';
+    *width = used + ellipsis_width;
+    return ret;
+}
+
 static void
 render_tab_bar(struct terminal *term)
 {
     struct wl_window *win = term->window;
     struct wayl_sub_surface *surf = &win->tab_bar.surface;
 
-    if (!tab_bar_visible(win)) {
+    if (!tab_bar_shown(win)) {
         if (surf->surface.surf != NULL) {
             wl_surface_attach(surf->surface.surf, NULL, 0, 0);
             wl_surface_commit(surf->surface.surf);
@@ -3178,7 +3241,7 @@ render_tab_bar(struct terminal *term)
         return;
 
     const int width = term->width;
-    const int height = tab_bar_height(term);
+    const int height = tab_bar_strip_height(term);
     if (width <= 0 || height <= 0)
         return;
 
@@ -3230,13 +3293,26 @@ render_tab_bar(struct terminal *term)
                     x0, sep_inset, sep_width, height - 2 * sep_inset});
         }
 
-        char *title = xasprintf(
-            "%zu: %s", idx + 1,
-            tab->window_title != NULL ? tab->window_title : "foot");
-        char32_t *text = ambstoc32(title);
-        free(title);
+        const bool renaming = active && tab->tab.rename.active;
+        const int cursor_width = max(1, (int)roundf(1.5 * term->scale));
+        const int avail = x1 - x0 - 2 * margin - (renaming ? cursor_width : 0);
 
-        if (text != NULL) {
+        char32_t *label = NULL;
+        if (renaming) {
+            label = c32dup(tab->tab.rename.buf != NULL
+                           ? tab->tab.rename.buf : U"");
+        } else {
+            char *title = xasprintf("%zu: %s", idx + 1, tab_title(tab));
+            label = ambstoc32(title);
+            free(title);
+        }
+
+        if (label != NULL && avail > 0) {
+            /* While editing, keep the end (where the cursor is) visible */
+            int text_width = 0;
+            char32_t *text = ellipsize(
+                term, font, label, avail, renaming, &text_width);
+
             pixman_region32_t clip;
             pixman_region32_init_rect(
                 &clip, x0, 0, max(0, x1 - x0 - margin / 2), height);
@@ -3249,7 +3325,17 @@ render_tab_bar(struct terminal *term)
 
             pixman_image_set_clip_region32(pix, NULL);
             free(text);
+
+            if (renaming) {
+                pixman_image_fill_rectangles(
+                    PIXMAN_OP_SRC, pix, &active_fg, 1,
+                    &(pixman_rectangle16_t){
+                        x0 + margin + text_width, sep_inset,
+                        cursor_width, height - 2 * sep_inset});
+            }
         }
+
+        free(label);
 
         prev = tab;
         idx++;

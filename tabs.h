@@ -3,6 +3,9 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+#include <xkbcommon/xkbcommon.h>
+
+struct seat;
 struct terminal;
 struct wl_window;
 
@@ -17,7 +20,22 @@ bool tab_new(struct terminal *term);
 void tab_activate(struct terminal *term);
 void tab_activate_index(struct wl_window *win, size_t idx);
 void tab_cycle(struct wl_window *win, int direction);
+void tab_move(struct wl_window *win, int direction);
 void tab_close_all(struct wl_window *win);
+struct terminal *tab_at_index(const struct wl_window *win, size_t idx);
+
+/* The tab's label: user assigned, or the window title */
+const char *tab_title(const struct terminal *term);
+
+/*
+ * Interactive renaming. While active, all keyboard input goes to the
+ * tab's label. An empty name reverts to the window title.
+ */
+void tab_rename_start(struct terminal *term);
+void tab_rename_commit(struct terminal *term);
+void tab_rename_cancel(struct terminal *term);
+void tab_rename_input(
+    struct seat *seat, struct terminal *term, uint32_t key, xkb_keysym_t sym);
 
 /*
  * Removes the terminal from its window's tab list. Returns true if
@@ -26,8 +44,15 @@ void tab_close_all(struct wl_window *win);
  */
 bool tab_detach(struct terminal *term);
 
+/*
+ * The tab bar is visible (and takes up space) when there's more than
+ * one tab. It is also *shown* while renaming the only tab, but then
+ * on top of the grid, to avoid resizing it.
+ */
 bool tab_bar_visible(const struct wl_window *win);
+bool tab_bar_shown(const struct wl_window *win);
 int tab_bar_height(const struct terminal *term);
+int tab_bar_strip_height(const struct terminal *term);
 void tab_bar_tab_extent(
     const struct wl_window *win, int width, size_t idx, int *x0, int *x1);
 int tab_bar_tab_at(const struct wl_window *win, int x);

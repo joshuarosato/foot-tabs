@@ -555,6 +555,18 @@ struct terminal {
     bool window_title_has_been_set;
     char *window_title;
     tll(char *) window_title_stack;
+
+    struct {
+        char *title;  /* User assigned; overrides window_title in the tab bar */
+
+        /* Interactive renaming, edited in-place in the tab bar */
+        struct {
+            bool active;
+            char32_t *buf;
+            size_t len;
+            size_t sz;
+        } rename;
+    } tab;
     //char *window_icon;  /* No escape sequence available to set the icon */
     //tll(char *)window_icon_stack;
     char *app_id;

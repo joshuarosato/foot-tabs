@@ -77,8 +77,11 @@
 * Tabs. New key bindings: `tab-new` (default `Control+Shift+t`),
   `tab-close` (default `Control+Shift+w`), `tab-next` (default
   `Control+Next`), `tab-prev` (default `Control+Prior`), and
-  `tab-goto-1` .. `tab-goto-9`. A tab bar is shown when a window has
-  more than one tab.
+  `tab-goto-1` .. `tab-goto-9`, `tab-move-left` (default
+  `Control+Shift+Prior`), `tab-move-right` (default
+  `Control+Shift+Next`) and `tab-rename`. A tab bar is shown when a
+  window has more than one tab; click to switch tab, double-click to
+  rename, middle-click to close, and scroll to cycle tabs.
 
 
 ### Changed

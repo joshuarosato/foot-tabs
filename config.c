@@ -190,6 +190,9 @@ static const char *const binding_action_map[] = {
     [BIND_ACTION_TAB_CLOSE] = "tab-close",
     [BIND_ACTION_TAB_NEXT] = "tab-next",
     [BIND_ACTION_TAB_PREV] = "tab-prev",
+    [BIND_ACTION_TAB_MOVE_LEFT] = "tab-move-left",
+    [BIND_ACTION_TAB_MOVE_RIGHT] = "tab-move-right",
+    [BIND_ACTION_TAB_RENAME] = "tab-rename",
     [BIND_ACTION_TAB_GOTO_1] = "tab-goto-1",
     [BIND_ACTION_TAB_GOTO_2] = "tab-goto-2",
     [BIND_ACTION_TAB_GOTO_3] = "tab-goto-3",
@@ -3401,6 +3404,8 @@ add_default_key_bindings(struct config *conf)
         {BIND_ACTION_TAB_CLOSE, m(XKB_MOD_NAME_CTRL "+" XKB_MOD_NAME_SHIFT), {{XKB_KEY_w}}},
         {BIND_ACTION_TAB_NEXT, m(XKB_MOD_NAME_CTRL), {{XKB_KEY_Next}}},
         {BIND_ACTION_TAB_PREV, m(XKB_MOD_NAME_CTRL), {{XKB_KEY_Prior}}},
+        {BIND_ACTION_TAB_MOVE_LEFT, m(XKB_MOD_NAME_CTRL "+" XKB_MOD_NAME_SHIFT), {{XKB_KEY_Prior}}},
+        {BIND_ACTION_TAB_MOVE_RIGHT, m(XKB_MOD_NAME_CTRL "+" XKB_MOD_NAME_SHIFT), {{XKB_KEY_Next}}},
     };
 
     conf->bindings.key.count = ALEN(bindings);

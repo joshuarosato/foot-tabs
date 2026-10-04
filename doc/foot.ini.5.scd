@@ -1519,7 +1519,14 @@ e.g. *search-start=none*.
 	
 	A tab bar is shown at the top of the window whenever it has more
 	than one tab. It uses the *font* and *size* options from the
-	*csd* section. Click on a tab to switch to it.
+	*csd* section. Long titles are truncated with an ellipsis.
+	
+	Mouse actions in the tab bar:
+	
+	- Left click: switch to the tab.
+	- Double click (on the active tab): rename the tab.
+	- Middle click: close the tab.
+	- Scroll wheel: switch to the next/previous tab.
 	
 	Default: _Control+Shift+t_.
 
@@ -1534,6 +1541,28 @@ e.g. *search-start=none*.
 
 *tab-goto-1* .. *tab-goto-9*
 	Switches to the specified tab. Default: _none_.
+
+*tab-move-left*, *tab-move-right*
+	Moves the current tab one step to the left, or right, in the tab
+	bar. Default: _Control+Shift+Prior_ and _Control+Shift+Next_.
+
+*tab-rename*
+	Renames the current tab. The name is edited in-place in the tab
+	bar (which is shown on top of the terminal while renaming, if the
+	window only has one tab). All keyboard input goes to the name
+	while renaming:
+	
+	- Enter: save the new name. An empty name reverts to showing the
+	  window title (as set by the application).
+	- Escape, Ctrl+c, Ctrl+g: cancel.
+	- Backspace: delete the previous character.
+	- Ctrl+Backspace: delete the previous word.
+	- Ctrl+u: clear the name.
+	
+	The name is only used in the tab bar; it does not change the
+	window title.
+	
+	Default: _none_.
 
 # SECTION: search-bindings
 
