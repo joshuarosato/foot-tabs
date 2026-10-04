@@ -2808,7 +2808,12 @@ wl_pointer_motion(void *data, struct wl_pointer *wl_pointer,
     case TERM_SURF_BORDER_RIGHT:
     case TERM_SURF_BORDER_TOP:
     case TERM_SURF_BORDER_BOTTOM:
+        break;
+
     case TERM_SURF_TAB_BAR:
+        /* Dragging a tab (it was activated when the button was pressed) */
+        if (button == BTN_LEFT)
+            tab_drag(win, seat->mouse.x);
         break;
 
     case TERM_SURF_GRID: {

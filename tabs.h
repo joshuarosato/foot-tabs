@@ -24,6 +24,7 @@ void tab_activate(struct terminal *term);
 void tab_activate_index(struct wl_window *win, size_t idx);
 void tab_cycle(struct wl_window *win, int direction);
 void tab_move(struct wl_window *win, int direction);
+void tab_drag(struct wl_window *win, int x);
 void tab_close_all(struct wl_window *win);
 
 /*

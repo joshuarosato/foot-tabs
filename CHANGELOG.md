@@ -81,8 +81,9 @@
   `tab-move-left` (default
   `Control+Shift+Prior`), `tab-move-right` (default
   `Control+Shift+Next`) and `tab-rename`. A tab bar is shown when a
-  window has more than one tab; click to switch tab, double-click to
-  rename, middle-click to close, and scroll to cycle tabs. A window
+  window has more than one tab; click to switch tab, drag to move it,
+  double-click to rename, middle-click to close, and scroll to cycle
+  tabs. A window
   can have at most 9 tabs.
 * `[tabs]` section, with the options:
   - `confirm-close`: when enabled (the default), closing a window with

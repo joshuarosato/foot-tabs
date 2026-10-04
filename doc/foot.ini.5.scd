@@ -1562,6 +1562,7 @@ e.g. *search-start=none*.
 	Mouse actions in the tab bar:
 	
 	- Left click: switch to the tab.
+	- Left click and drag: move the tab.
 	- Double click (on the active tab): rename the tab.
 	- Middle click: close the tab.
 	- Scroll wheel: switch to the next/previous tab.

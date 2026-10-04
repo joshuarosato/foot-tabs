@@ -236,6 +236,34 @@ tab_move(struct wl_window *win, int direction)
     }
 }
 
+/*
+ * Moves the active tab to the tab bar position under 'x' (which may
+ * be outside the tab bar, while dragging).
+ */
+void
+tab_drag(struct wl_window *win, int x)
+{
+    const int count = tll_length(win->tabs);
+    const int width = win->term->width;
+
+    if (count < 2 || width <= 0)
+        return;
+
+    const int target = max(0, min(count - 1, (int)((int64_t)x * count / width)));
+
+    int current = 0;
+    tll_foreach(win->tabs, it) {
+        if (it->item == win->term)
+            break;
+        current++;
+    }
+
+    for (; current < target; current++)
+        tab_move(win, 1);
+    for (; current > target; current--)
+        tab_move(win, -1);
+}
+
 const char *
 tab_title(const struct terminal *term)
 {

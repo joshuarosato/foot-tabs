@@ -14,7 +14,7 @@ The fast, lightweight and minimalistic Wayland terminal emulator.
 > - <kbd>ctrl</kbd>+<kbd>page down</kbd>/<kbd>page up</kbd> next/previous
 >   tab, <kbd>ctrl</kbd>+<kbd>1</kbd>..<kbd>9</kbd> go to tab
 > - <kbd>ctrl</kbd>+<kbd>shift</kbd>+<kbd>page down</kbd>/<kbd>page up</kbd>
->   move tab
+>   move tab (or drag it with the mouse)
 > - Tab bar: click to switch, double-click to rename, middle-click to
 >   close, scroll to cycle
 > - Closing a window with several tabs asks for confirmation
