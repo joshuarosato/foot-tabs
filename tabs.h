@@ -25,6 +25,15 @@ void tab_activate_index(struct wl_window *win, size_t idx);
 void tab_cycle(struct wl_window *win, int direction);
 void tab_move(struct wl_window *win, int direction);
 void tab_close_all(struct wl_window *win);
+
+/*
+ * Closes the window, i.e. all its tabs. If the window has more than
+ * one tab, the user is first asked to confirm (unless disabled in the
+ * configuration). Requesting a close while already asking, closes
+ * the window.
+ */
+void tab_request_close_window(struct wl_window *win);
+void tab_confirm_close_input(struct terminal *term, xkb_keysym_t sym);
 struct terminal *tab_at_index(const struct wl_window *win, size_t idx);
 
 /* The tab's label: user assigned, or the window title */

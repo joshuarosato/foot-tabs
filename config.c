@@ -1055,6 +1055,9 @@ parse_section_main(struct context *ctx)
     else if (streq(key, "resize-by-cells"))
         return value_to_bool(ctx, &conf->resize_by_cells);
 
+    else if (streq(key, "confirm-close-tabs"))
+        return value_to_bool(ctx, &conf->confirm_close_tabs);
+
     else if (streq(key, "resize-keep-grid"))
         return value_to_bool(ctx, &conf->resize_keep_grid);
 
@@ -3556,6 +3559,7 @@ config_load(struct config *conf, const char *conf_path,
         .pad_bottom = 0,
         .center_when = CENTER_MAXIMIZED_AND_FULLSCREEN,
         .resize_by_cells = true,
+        .confirm_close_tabs = true,
         .resize_keep_grid = true,
         .resize_delay_ms = 100,
         .dim = { .amount = 1.5 },

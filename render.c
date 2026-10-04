@@ -1970,6 +1970,8 @@ render_overlay_single_pixel(struct terminal *term, enum overlay_style style,
     }
 }
 
+static void render_confirm_close_box(struct terminal *term, struct buffer *buf);
+
 void
 render_overlay(struct terminal *term)
 {
@@ -1977,6 +1979,7 @@ render_overlay(struct terminal *term)
     const bool unicode_mode_active = term->unicode_mode.active;
 
     const enum overlay_style style =
+        term->window->confirm_close ? OVERLAY_CONFIRM_CLOSE :
         term->is_searching ? OVERLAY_SEARCH :
         term->flash.active ? OVERLAY_FLASH :
         unicode_mode_active ? OVERLAY_UNICODE_MODE :
@@ -1998,6 +2001,7 @@ render_overlay(struct terminal *term)
     switch (style) {
     case OVERLAY_SEARCH:
     case OVERLAY_UNICODE_MODE:
+    case OVERLAY_CONFIRM_CLOSE:
         color = (pixman_color_t){0, 0, 0, 0x7fff};
         break;
 
@@ -2146,7 +2150,8 @@ render_overlay(struct terminal *term)
         pixman_region32_fini(&damage);
     }
 
-    else if (buf == term->render.last_overlay_buf &&
+    else if (style != OVERLAY_CONFIRM_CLOSE &&
+             buf == term->render.last_overlay_buf &&
              style == term->render.last_overlay_style)
     {
         xassert(style == OVERLAY_FLASH || style == OVERLAY_UNICODE_MODE);
@@ -2160,6 +2165,9 @@ render_overlay(struct terminal *term)
     pixman_image_fill_rectangles(
         PIXMAN_OP_SRC, buf->pix[0], &color, 1,
         &(pixman_rectangle16_t){0, 0, term->width, term->height});
+
+    if (style == OVERLAY_CONFIRM_CLOSE)
+        render_confirm_close_box(term, buf);
 
     quirk_weston_subsurface_desync_on(overlay->sub);
     wayl_surface_scale(
@@ -3354,6 +3362,82 @@ render_tab_bar(struct terminal *term)
     }
 
     wl_surface_commit(surf->surface.surf);
+}
+
+/* Centered dialog, asking the user to confirm closing all tabs */
+static void
+render_confirm_close_box(struct terminal *term, struct buffer *buf)
+{
+    struct fcft_font *font = term->fonts[0];
+    if (font == NULL)
+        return;
+
+    const int pad_x = 2 * term->cell_width;
+    const int pad_y = term->cell_height;
+    const int line_height = term->cell_height;
+    const int max_text_width = term->width - 2 * pad_x - 2 * term->cell_width;
+
+    if (max_text_width <= 0)
+        return;
+
+    char *msg = xasprintf(
+        "You have %zu tabs open. Close the window?",
+        tll_length(term->window->tabs));
+    char32_t *question = ambstoc32(msg);
+    free(msg);
+
+    if (question == NULL)
+        return;
+
+    int question_width, answers_width;
+    char32_t *line1 = ellipsize(
+        term, font, question, max_text_width, false, &question_width);
+    char32_t *line2 = ellipsize(
+        term, font, U"[Y]es / [N]o", max_text_width, false, &answers_width);
+    free(question);
+
+    const int box_width = max(question_width, answers_width) + 2 * pad_x;
+    const int box_height = 2 * line_height + line_height / 2 + 2 * pad_y;
+    const int box_x = max(0, (term->width - box_width) / 2);
+    const int box_y = max(0, (term->height - box_height) / 2);
+    const int border = max(1, (int)roundf(term->scale));
+
+    const bool gamma_correct = wayl_do_linear_blending(term->wl, term->conf);
+    const uint32_t _bg = term->colors.bg;
+    const uint32_t _fg = term->colors.fg;
+
+    const pixman_color_t bg = color_hex_to_pixman(_bg, gamma_correct);
+    const pixman_color_t fg = color_hex_to_pixman(_fg, gamma_correct);
+    const pixman_color_t border_color = color_hex_to_pixman(
+        color_blend_towards(_bg, _fg, 0.4), gamma_correct);
+
+    pixman_image_t *pix = buf->pix[0];
+
+    pixman_image_fill_rectangles(
+        PIXMAN_OP_SRC, pix, &border_color, 1,
+        &(pixman_rectangle16_t){box_x, box_y, box_width, box_height});
+    pixman_image_fill_rectangles(
+        PIXMAN_OP_SRC, pix, &bg, 1,
+        &(pixman_rectangle16_t){
+            box_x + border, box_y + border,
+            box_width - 2 * border, box_height - 2 * border});
+
+    pixman_region32_t clip;
+    pixman_region32_init_rect(&clip, box_x, box_y, box_width, box_height);
+    pixman_image_set_clip_region32(pix, &clip);
+    pixman_region32_fini(&clip);
+
+    render_text_line(
+        term, pix, font, line1, &fg,
+        box_x + (box_width - question_width) / 2, box_y + pad_y, line_height);
+    render_text_line(
+        term, pix, font, line2, &fg,
+        box_x + (box_width - answers_width) / 2,
+        box_y + pad_y + line_height + line_height / 2, line_height);
+
+    pixman_image_set_clip_region32(pix, NULL);
+    free(line1);
+    free(line2);
 }
 
 static void

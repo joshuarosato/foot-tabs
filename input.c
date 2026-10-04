@@ -455,7 +455,7 @@ execute_binding(struct seat *seat, struct terminal *term,
         return true;
 
     case BIND_ACTION_QUIT:
-        tab_close_all(term->window);
+        tab_request_close_window(term->window);
         return true;
 
     case BIND_ACTION_REGEX_LAUNCH:
@@ -1687,7 +1687,13 @@ key_press_release(struct seat *seat, struct terminal *term, uint32_t serial,
         seat->wayl->key_binding_manager, term->conf, seat);
     xassert(bindings != NULL);
 
-    if (term->unicode_mode.active) {
+    if (term->window->confirm_close) {
+        if (pressed)
+            tab_confirm_close_input(term, sym);
+        return;
+    }
+
+    else if (term->unicode_mode.active) {
         if (pressed)
             unicode_mode_input(seat, term, sym);
         return;
@@ -1975,10 +1981,12 @@ UNITTEST
 
     struct config conf = {0};
     struct grid grid = {0};
+    struct wl_window win = {0};
 
     struct terminal term = {
         .conf = &conf,
         .grid = &grid,
+        .window = &win,
         .ptmx = chan[1],
         .selection = {
             .coords = {
@@ -3297,7 +3305,7 @@ wl_pointer_button(void *data, struct wl_pointer *wl_pointer,
             pointer_is_on_button(term, seat, CSD_SURF_CLOSE) &&
             state == WL_POINTER_BUTTON_STATE_RELEASED)
         {
-            tab_close_all(term->window);
+            tab_request_close_window(term->window);
         }
         break;
 

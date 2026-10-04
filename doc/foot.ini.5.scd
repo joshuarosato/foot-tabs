@@ -354,6 +354,14 @@ empty string to be set, but it must be quoted: *KEY=""*
 	
 	Default: _100_.
 
+*confirm-close-tabs*
+	Boolean. When enabled, closing a window that has more than one
+	tab (e.g. from the compositor, the window's close button, or the
+	*quit* key binding) first asks for confirmation. Answer with *y*
+	or *Enter* to close all tabs, or *n* or *Escape* to keep the
+	window open. Closing the window again while the question is
+	shown closes it immediately. Default: _yes_.
+
 *resize-by-cells*
 	Boolean.
 
@@ -1509,7 +1517,8 @@ e.g. *search-start=none*.
 	Default: _none_
 
 *quit*
-	Quit foot, closing all tabs in the window. Default: _none_.
+	Quit foot, closing all tabs in the window (see
+	*confirm-close-tabs*). Default: _none_.
 
 *tab-new*
 	Opens a new tab in the current window. A window can have at most

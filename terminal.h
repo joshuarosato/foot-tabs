@@ -370,6 +370,7 @@ enum overlay_style {
     OVERLAY_SEARCH,
     OVERLAY_FLASH,
     OVERLAY_UNICODE_MODE,
+    OVERLAY_CONFIRM_CLOSE,
 };
 
 typedef tll(struct ptmx_buffer) ptmx_buffer_list_t;

@@ -1013,7 +1013,7 @@ xdg_toplevel_close(void *data, struct xdg_toplevel *xdg_toplevel)
 {
     struct wl_window *win = data;
     LOG_DBG("xdg-toplevel: close");
-    tab_close_all(win);
+    tab_request_close_window(win);
 }
 
 #if defined(XDG_TOPLEVEL_CONFIGURE_BOUNDS_SINCE_VERSION)

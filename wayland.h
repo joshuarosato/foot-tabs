@@ -405,6 +405,9 @@ struct wl_window {
         bool dirty;
     } tab_bar;
 
+    /* Asking the user to confirm closing a window with multiple tabs */
+    bool confirm_close;
+
     struct wayl_sub_surface search;
     struct wayl_sub_surface scrollback_indicator;
     struct wayl_sub_surface render_timer;

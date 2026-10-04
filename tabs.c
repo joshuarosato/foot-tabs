@@ -408,6 +408,59 @@ tab_cycle(struct wl_window *win, int direction)
 }
 
 void
+tab_request_close_window(struct wl_window *win)
+{
+    struct terminal *term = win->term;
+
+    if (win->confirm_close ||
+        tll_length(win->tabs) < 2 ||
+        !term->conf->confirm_close_tabs)
+    {
+        tab_close_all(win);
+        return;
+    }
+
+    /* All keyboard input goes to the prompt; leave other input modes */
+    if (term->tab.rename.active)
+        tab_rename_cancel(term);
+    if (term->is_searching)
+        search_cancel(term);
+    urls_reset(term);
+
+    win->confirm_close = true;
+    render_refresh(term);
+}
+
+static void
+confirm_close_dismiss(struct wl_window *win)
+{
+    win->confirm_close = false;
+    render_refresh(win->term);
+}
+
+void
+tab_confirm_close_input(struct terminal *term, xkb_keysym_t sym)
+{
+    struct wl_window *win = term->window;
+    xassert(win->confirm_close);
+
+    switch (sym) {
+    case XKB_KEY_y:
+    case XKB_KEY_Y:
+    case XKB_KEY_Return:
+    case XKB_KEY_KP_Enter:
+        tab_close_all(win);
+        break;
+
+    case XKB_KEY_n:
+    case XKB_KEY_N:
+    case XKB_KEY_Escape:
+        confirm_close_dismiss(win);
+        break;
+    }
+}
+
+void
 tab_close_all(struct wl_window *win)
 {
     /* term_shutdown() is asynchronous; the tabs are detached later */
@@ -451,6 +504,9 @@ tab_detach(struct terminal *term)
     }
 
     xassert(win->term != term);
+
+    if (win->confirm_close && tll_length(win->tabs) < 2)
+        confirm_close_dismiss(win);
 
     tll_foreach(term->wl->seats, it) {
         xassert(it->item.kbd_focus != term);

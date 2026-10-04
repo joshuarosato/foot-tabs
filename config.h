@@ -251,6 +251,7 @@ struct config {
     enum center_when center_when;
 
     bool resize_by_cells;
+    bool confirm_close_tabs;
     bool resize_keep_grid;
 
     uint16_t resize_delay_ms;
