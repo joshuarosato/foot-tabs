@@ -84,8 +84,12 @@
   window has more than one tab; click to switch tab, double-click to
   rename, middle-click to close, and scroll to cycle tabs. A window
   can have at most 9 tabs.
-* `confirm-close-tabs` option. When enabled (the default), closing a
-  window with more than one tab asks for confirmation.
+* `[tabs]` section, with the options:
+  - `confirm-close`: when enabled (the default), closing a window with
+    more than one tab asks for confirmation. Previously named
+    `[main].confirm-close-tabs` (deprecated, but still accepted).
+  - `new-tab-position`: open new tabs after the current tab (the
+    default), or after the last tab.
 
 
 ### Changed

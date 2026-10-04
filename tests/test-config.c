@@ -491,7 +491,7 @@ test_section_main(void)
     test_boolean(&ctx, &parse_section_main, "box-drawings-uses-font-glyphs", &conf.box_drawings_uses_font_glyphs);
     test_boolean(&ctx, &parse_section_main, "locked-title", &conf.locked_title);
     test_boolean(&ctx, &parse_section_main, "dpi-aware", &conf.dpi_aware);
-    test_boolean(&ctx, &parse_section_main, "confirm-close-tabs", &conf.confirm_close_tabs);
+    test_boolean(&ctx, &parse_section_main, "confirm-close-tabs", &conf.tabs.confirm_close);
     test_boolean(&ctx, &parse_section_main, "gamma-correct-blending", &conf.gamma_correct);
     test_boolean(&ctx, &parse_section_main, "uppercase-regex-insert", &conf.uppercase_regex_insert);
 
@@ -865,6 +865,28 @@ test_section_colors_light(void)
     test_invalid_key(&ctx, &parse_section_colors_light, "256");
 
     /* TODO: alpha (float in range 0-1, converted to uint16_t) */
+
+    config_free(&conf);
+}
+
+static void
+test_section_tabs(void)
+{
+    struct config conf = {0};
+    struct context ctx = {
+        .conf = &conf, .section = "tabs", .path = "unittest"};
+
+    test_invalid_key(&ctx, &parse_section_tabs, "invalid-key");
+
+    test_enum(
+        &ctx, &parse_section_tabs, "new-tab-position",
+        2,
+        (const char *[]){"after-current", "last"},
+        (int []){TABS_NEW_POSITION_AFTER_CURRENT, TABS_NEW_POSITION_LAST},
+        (int *)&conf.tabs.new_position);
+
+    test_boolean(&ctx, &parse_section_tabs, "shared-font-size", &conf.tabs.shared_font_size);
+    test_boolean(&ctx, &parse_section_tabs, "confirm-close", &conf.tabs.confirm_close);
 
     config_free(&conf);
 }
@@ -1540,6 +1562,7 @@ main(int argc, const char *const *argv)
     test_section_cursor();
     test_section_mouse();
     test_section_touch();
+    test_section_tabs();
     test_section_colors_dark();
     test_section_colors_light();
     test_section_csd();

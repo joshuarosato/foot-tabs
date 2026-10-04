@@ -1055,8 +1055,17 @@ parse_section_main(struct context *ctx)
     else if (streq(key, "resize-by-cells"))
         return value_to_bool(ctx, &conf->resize_by_cells);
 
-    else if (streq(key, "confirm-close-tabs"))
-        return value_to_bool(ctx, &conf->confirm_close_tabs);
+    else if (streq(key, "confirm-close-tabs")) {
+        LOG_WARN("%s:%d: [main].confirm-close-tabs: deprecated; "
+                 "use [tabs].confirm-close instead", ctx->path, ctx->lineno);
+
+        user_notification_add(
+            &conf->notifications,
+            USER_NOTIFICATION_DEPRECATED,
+            xstrdup("[main].confirm-close-tabs: use [tabs].confirm-close instead"));
+
+        return value_to_bool(ctx, &conf->tabs.confirm_close);
+    }
 
     else if (streq(key, "resize-keep-grid"))
         return value_to_bool(ctx, &conf->resize_keep_grid);
@@ -3043,6 +3052,34 @@ parse_section_touch(struct context *ctx) {
 }
 
 static bool
+parse_section_tabs(struct context *ctx)
+{
+    struct config *conf = ctx->conf;
+    const char *key = ctx->key;
+
+    if (streq(key, "new-tab-position")) {
+        _Static_assert(sizeof(conf->tabs.new_position) == sizeof(int),
+            "enum is not 32-bit");
+
+        return value_to_enum(
+            ctx,
+            (const char *[]){"after-current", "last", NULL},
+            (int *)&conf->tabs.new_position);
+    }
+
+    else if (streq(key, "shared-font-size"))
+        return value_to_bool(ctx, &conf->tabs.shared_font_size);
+
+    else if (streq(key, "confirm-close"))
+        return value_to_bool(ctx, &conf->tabs.confirm_close);
+
+    else {
+        LOG_CONTEXTUAL_ERR("not a valid option: %s", key);
+        return false;
+    }
+}
+
+static bool
 parse_key_value(char *kv, char **section, const char **key, const char **value)
 {
     bool section_is_needed = section != NULL;
@@ -3126,6 +3163,7 @@ enum section {
     SECTION_ENVIRONMENT,
     SECTION_TWEAK,
     SECTION_TOUCH,
+    SECTION_TABS,
 
     SECTION_COUNT,
 };
@@ -3158,6 +3196,7 @@ static const struct {
     [SECTION_ENVIRONMENT] =     {&parse_section_environment, "environment"},
     [SECTION_TWEAK] =           {&parse_section_tweak, "tweak"},
     [SECTION_TOUCH] =           {&parse_section_touch, "touch"},
+    [SECTION_TABS] =            {&parse_section_tabs, "tabs"},
 };
 
 static_assert(ALEN(section_info) == SECTION_COUNT, "section info array size mismatch");
@@ -3559,7 +3598,6 @@ config_load(struct config *conf, const char *conf_path,
         .pad_bottom = 0,
         .center_when = CENTER_MAXIMIZED_AND_FULLSCREEN,
         .resize_by_cells = true,
-        .confirm_close_tabs = true,
         .resize_keep_grid = true,
         .resize_delay_ms = 100,
         .dim = { .amount = 1.5 },
@@ -3700,6 +3738,12 @@ config_load(struct config *conf, const char *conf_path,
 
         .touch = {
             .long_press_delay = 400,
+        },
+
+        .tabs = {
+            .new_position = TABS_NEW_POSITION_AFTER_CURRENT,
+            .shared_font_size = true,
+            .confirm_close = true,
         },
 
         .env_vars = tll_init(),

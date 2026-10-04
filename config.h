@@ -251,7 +251,6 @@ struct config {
     enum center_when center_when;
 
     bool resize_by_cells;
-    bool confirm_close_tabs;
     bool resize_keep_grid;
 
     uint16_t resize_delay_ms;
@@ -466,6 +465,16 @@ struct config {
     struct {
         uint32_t long_press_delay;
     } touch;
+
+    struct {
+        enum {
+            TABS_NEW_POSITION_AFTER_CURRENT,
+            TABS_NEW_POSITION_LAST,
+        } new_position;
+
+        bool shared_font_size;
+        bool confirm_close;
+    } tabs;
 
     user_notifications_t notifications;
 };

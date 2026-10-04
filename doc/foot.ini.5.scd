@@ -354,14 +354,6 @@ empty string to be set, but it must be quoted: *KEY=""*
 	
 	Default: _100_.
 
-*confirm-close-tabs*
-	Boolean. When enabled, closing a window that has more than one
-	tab (e.g. from the compositor, the window's close button, or the
-	*quit* key binding) first asks for confirmation. Answer with *y*
-	or *Enter* to close all tabs, or *n* or *Escape* to keep the
-	window open. Closing the window again while the question is
-	shown closes it immediately. Default: _yes_.
-
 *resize-by-cells*
 	Boolean.
 
@@ -1275,6 +1267,35 @@ Examples:
 	Close button's background color. Default: use the default
 	_regular1_ color (red).
 
+# SECTION: tabs
+
+This section controls the behavior of tabs. See the *tab-\** key
+bindings for opening, closing and switching tabs.
+
+The tab bar uses the *font* and *size* options from the *csd*
+section.
+
+*new-tab-position*
+	Where new tabs are opened. One of:
+	
+	- *after-current*: to the right of the current tab.
+	- *last*: after the last tab.
+	
+	Default: _after-current_.
+
+*confirm-close*
+	Boolean. When enabled, closing a window that has more than one
+	tab (e.g. from the compositor, the window's close button, or the
+	*quit* key binding) first asks for confirmation. Answer with *y*
+	or *Enter* to close all tabs, or *n* or *Escape* to keep the
+	window open. Closing the window again while the question is
+	shown closes it immediately.
+	
+	This option was previously called *confirm-close-tabs*, in the
+	*main* section. The old name still works, but is deprecated.
+	
+	Default: _yes_.
+
 # SECTION: key-bindings
 
 This section lets you override the default key bindings.
@@ -1517,8 +1538,8 @@ e.g. *search-start=none*.
 	Default: _none_
 
 *quit*
-	Quit foot, closing all tabs in the window (see
-	*confirm-close-tabs*). Default: _none_.
+	Quit foot, closing all tabs in the window (see *confirm-close* in
+	the *tabs* section). Default: _none_.
 
 *tab-new*
 	Opens a new tab in the current window. A window can have at most

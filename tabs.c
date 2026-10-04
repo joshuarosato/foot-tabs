@@ -65,6 +65,23 @@ tab_new(struct terminal *term)
         return false;
     }
 
+    /* term_init() appended the tab; move it next to the current one */
+    if (term->conf->tabs.new_position == TABS_NEW_POSITION_AFTER_CURRENT) {
+        /*
+         * Bubble it towards the front, until it's right after the
+         * current tab (swapping items; the list nodes stay put).
+         */
+        xassert(tll_back(win->tabs) == tab);
+
+        tll_rforeach(win->tabs, it) {
+            if (it->prev == NULL || it->prev->item == term)
+                break;
+
+            it->item = it->prev->item;
+            it->prev->item = tab;
+        }
+    }
+
     /* Size the grid before we start reading from the PTY */
     tab_activate(tab);
     term_window_configured(tab);
@@ -414,7 +431,7 @@ tab_request_close_window(struct wl_window *win)
 
     if (win->confirm_close ||
         tll_length(win->tabs) < 2 ||
-        !term->conf->confirm_close_tabs)
+        !term->conf->tabs.confirm_close)
     {
         tab_close_all(win);
         return;
