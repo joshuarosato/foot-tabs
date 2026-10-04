@@ -1512,8 +1512,9 @@ e.g. *search-start=none*.
 	Quit foot, closing all tabs in the window. Default: _none_.
 
 *tab-new*
-	Opens a new tab in the current window. The new tab runs the
-	configured *shell*. If the shell has been configured to emit the
+	Opens a new tab in the current window. A window can have at most
+	9 tabs; at the limit, the window flashes instead. The new tab runs
+	the configured *shell*. If the shell has been configured to emit the
 	OSC 7 escape sequence, the new tab will start in the current
 	working directory.
 	
@@ -1540,7 +1541,7 @@ e.g. *search-start=none*.
 	(i.e. Control+PageDown and Control+PageUp).
 
 *tab-goto-1* .. *tab-goto-9*
-	Switches to the specified tab. Default: _none_.
+	Switches to the specified tab. Default: _Control+1_ .. _Control+9_.
 
 *tab-move-left*, *tab-move-right*
 	Moves the current tab one step to the left, or right, in the tab

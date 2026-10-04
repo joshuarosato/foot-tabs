@@ -40,6 +40,13 @@ tab_new(struct terminal *term)
     if (!win->is_configured)
         return false;
 
+    if (tll_length(win->tabs) >= TAB_MAX_COUNT) {
+        LOG_INFO("refusing to open more than %d tabs", TAB_MAX_COUNT);
+        term_flash(term, 50);
+        render_refresh(term);
+        return false;
+    }
+
     /*
      * The configuration may be owned by another terminal instance
      * (e.g. a footclient instance with command line overrides), that

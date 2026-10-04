@@ -16,6 +16,9 @@ struct wl_window;
  * are activated.
  */
 
+/* Matches the tab-goto-N key bindings */
+#define TAB_MAX_COUNT 9
+
 bool tab_new(struct terminal *term);
 void tab_activate(struct terminal *term);
 void tab_activate_index(struct wl_window *win, size_t idx);

@@ -3406,6 +3406,15 @@ add_default_key_bindings(struct config *conf)
         {BIND_ACTION_TAB_PREV, m(XKB_MOD_NAME_CTRL), {{XKB_KEY_Prior}}},
         {BIND_ACTION_TAB_MOVE_LEFT, m(XKB_MOD_NAME_CTRL "+" XKB_MOD_NAME_SHIFT), {{XKB_KEY_Prior}}},
         {BIND_ACTION_TAB_MOVE_RIGHT, m(XKB_MOD_NAME_CTRL "+" XKB_MOD_NAME_SHIFT), {{XKB_KEY_Next}}},
+        {BIND_ACTION_TAB_GOTO_1, m(XKB_MOD_NAME_CTRL), {{XKB_KEY_1}}},
+        {BIND_ACTION_TAB_GOTO_2, m(XKB_MOD_NAME_CTRL), {{XKB_KEY_2}}},
+        {BIND_ACTION_TAB_GOTO_3, m(XKB_MOD_NAME_CTRL), {{XKB_KEY_3}}},
+        {BIND_ACTION_TAB_GOTO_4, m(XKB_MOD_NAME_CTRL), {{XKB_KEY_4}}},
+        {BIND_ACTION_TAB_GOTO_5, m(XKB_MOD_NAME_CTRL), {{XKB_KEY_5}}},
+        {BIND_ACTION_TAB_GOTO_6, m(XKB_MOD_NAME_CTRL), {{XKB_KEY_6}}},
+        {BIND_ACTION_TAB_GOTO_7, m(XKB_MOD_NAME_CTRL), {{XKB_KEY_7}}},
+        {BIND_ACTION_TAB_GOTO_8, m(XKB_MOD_NAME_CTRL), {{XKB_KEY_8}}},
+        {BIND_ACTION_TAB_GOTO_9, m(XKB_MOD_NAME_CTRL), {{XKB_KEY_9}}},
     };
 
     conf->bindings.key.count = ALEN(bindings);
