@@ -2417,11 +2417,16 @@ text_from_clipboard(struct seat *seat, struct terminal *term,
  * Starts a paste. Unless the user has disabled paste confirmations,
  * the pasted data is buffered, and sent (or confirmed) once it has
  * been received in its entirety.
+ *
+ * Returns false, and does nothing, if a paste is already in progress
+ * (including one waiting for the user to confirm it).
  */
-static void
+static bool
 paste_begin(struct terminal *term)
 {
-    xassert(!term->is_sending_paste_data);
+    if (term->is_sending_paste_data)
+        return false;
+
     term->is_sending_paste_data = true;
 
     term->paste_confirm.buffering =
@@ -2430,6 +2435,8 @@ paste_begin(struct terminal *term)
 
     if (!term->paste_confirm.buffering && term->bracketed_paste)
         term_paste_data_to_slave(term, "\033[200~", 6);
+
+    return true;
 }
 
 static void
@@ -2485,12 +2492,9 @@ paste_count_newlines(const char *data, size_t len)
 }
 
 static bool
-paste_needs_confirmation(const struct terminal *term)
+paste_needs_confirmation(const struct terminal *term, size_t newlines)
 {
-    const char *data = term->paste_confirm.data;
-    const size_t len = term->paste_confirm.len;
-
-    if (paste_count_newlines(data, len) == 0)
+    if (newlines == 0)
         return false;
 
     switch (term->conf->security.confirm_paste) {
@@ -2571,13 +2575,14 @@ receive_offer_done(void *user)
         return;
     }
 
-    if (!paste_needs_confirmation(term)) {
+    const size_t newlines = paste_count_newlines(pc->data, pc->len);
+
+    if (!paste_needs_confirmation(term, newlines)) {
         paste_send_buffer(term);
         return;
     }
 
     /* A trailing newline doesn't start another line */
-    const size_t newlines = paste_count_newlines(pc->data, pc->len);
     const char last = pc->data[pc->len - 1];
     pc->lines = newlines + (last == '\n' || last == '\r' ? 0 : 1);
 
@@ -2598,7 +2603,8 @@ selection_from_clipboard(struct seat *seat, struct terminal *term, uint32_t seri
     if (clipboard->data_offer == NULL)
         return;
 
-    paste_begin(term);
+    if (!paste_begin(term))
+        return;
 
     text_from_clipboard(
         seat, term, false, &receive_offer, &receive_offer_done, term);
@@ -2730,7 +2736,8 @@ selection_from_primary(struct seat *seat, struct terminal *term)
     if (primary->data_offer == NULL)
         return;
 
-    paste_begin(term);
+    if (!paste_begin(term))
+        return;
 
     text_from_primary(
         seat, term, false, &receive_offer, &receive_offer_done, term);
@@ -2991,6 +2998,15 @@ drop(void *data, struct wl_data_device *wl_data_device)
         return;
     }
 
+    /*
+     * The drag may have been accepted before another paste started
+     * (e.g. one waiting for the user to confirm it)
+     */
+    if (term->is_sending_paste_data) {
+        LOG_WARN("ignoring drag-and-drop: already pasting");
+        return;
+    }
+
     struct dnd_context *ctx = xmalloc(sizeof(*ctx));
     *ctx = (struct dnd_context){
         .term = term,
@@ -3017,7 +3033,8 @@ drop(void *data, struct wl_data_device *wl_data_device)
     /* Don't keep our copy of the write-end open (or we'll never get EOF) */
     close(write_fd);
 
-    paste_begin(term);
+    const bool UNUSED began = paste_begin(term);
+    xassert(began);
 
     begin_receive_clipboard(
         term, false, read_fd, clipboard->mime_type,
@@ -3154,6 +3171,11 @@ UNITTEST
     xassert(term.paste_confirm.lines == 2);
     xassert(term.is_sending_paste_data);
     xassert(streq(test_received(chan[0], received, sizeof(received)), ""));
+
+    /* Another paste is refused while waiting; the first is kept */
+    xassert(!paste_begin(&term));
+    xassert(term.paste_confirm.active);
+    xassert(term.paste_confirm.len == strlen("echo one\recho two\r"));
 
     /* ...and discarded on 'n' */
     selection_paste_confirm_input(&term, XKB_KEY_n);
