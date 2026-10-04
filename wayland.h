@@ -415,13 +415,16 @@ struct wl_window {
         struct wayl_sub_surface surface;
         bool visible;
 
+        /* Pointer is over the scrollbar */
+        bool hover;
+
         /* Dragging the thumb, with the pointer this far into it */
         bool dragging;
         int drag_offset;
 
         /* Last rendered state; to skip re-rendering when unchanged */
-        int x, y, width, height, thumb_y, thumb_height;
-        uint32_t track_color, thumb_color;
+        int x, y, width, height, thumb_y, thumb_height, thumb_width;
+        uint32_t thumb_color;
     } scrollbar;
 
     struct wayl_sub_surface search;

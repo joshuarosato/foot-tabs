@@ -2588,7 +2588,11 @@ wl_pointer_enter(void *data, struct wl_pointer *wl_pointer,
     case TERM_SURF_BORDER_TOP:
     case TERM_SURF_BORDER_BOTTOM:
     case TERM_SURF_TAB_BAR:
+        break;
+
     case TERM_SURF_SCROLLBAR:
+        win->scrollbar.hover = true;
+        render_refresh(term);
         break;
 
     case TERM_SURF_BUTTON_MINIMIZE:
@@ -2692,7 +2696,8 @@ wl_pointer_leave(void *data, struct wl_pointer *wl_pointer,
             break;
 
         case TERM_SURF_SCROLLBAR:
-            if (old_moused->window != NULL && old_moused->window->scrollbar.dragging) {
+            if (old_moused->window != NULL) {
+                old_moused->window->scrollbar.hover = false;
                 old_moused->window->scrollbar.dragging = false;
                 render_refresh(old_moused);
             }
@@ -2732,11 +2737,11 @@ scrollbar_drag_to(struct terminal *term, int y)
     if (!render_scrollbar_geometry(term, &g) || g.max_view_pos <= 0)
         return;
 
-    const int range = g.height - g.thumb_height;
+    const int range = g.track_height - g.thumb_height;
     if (range <= 0)
         return;
 
-    const int top = max(0, min(range, y - term->window->scrollbar.drag_offset));
+    const int top = max(0, min(range, y - g.track_y - term->window->scrollbar.drag_offset));
     const int target = (int)round((double)top * g.max_view_pos / range);
     const int delta = target - g.view_pos;
 

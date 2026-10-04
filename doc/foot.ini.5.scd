@@ -878,10 +878,16 @@ xdgtoken=95ebdfe56e4f47ddb5bba9d7dc3a2c35
 	  using the alternate screen, such as full-screen editors, since
 	  they have no scrollback).
 	
-	Drag the scrollbar to scroll, or click it to jump to that
-	position. Scrolling the mouse wheel over the scrollbar always
-	scrolls the scrollback, even if the application has enabled
-	mouse reporting.
+	The scrollbar is a slim, rounded thumb (without a track), which
+	widens while the mouse pointer is over it. Drag it to scroll, or
+	click above or below it to jump to that position. Scrolling the
+	mouse wheel over the scrollbar always scrolls the scrollback,
+	even if the application has enabled mouse reporting.
+	
+	The scrollback position indicator (see *indicator-position*) is
+	placed next to the scrollbar. With an empty *indicator-format*
+	(the default), the indicator is not shown while the scrollbar is,
+	since it would only mark the same position.
 	
 	The scrollbar is drawn on top of the terminal's right edge. To
 	avoid it covering text, configure a right padding at least as

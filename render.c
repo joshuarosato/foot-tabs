@@ -276,6 +276,21 @@ static inline int i_lerp(int from, int to, float t) {
     return from + (to - from) * t;
 }
 
+/*
+ * Mixes two colors: t=0 is 'from', t=1 is 'to'. Note that this is
+ * *not* the same as color_blend_towards(), whose 'amount' is a
+ * dimming factor (>= 1.0).
+ */
+static inline uint32_t
+color_mix(uint32_t from, uint32_t to, float t)
+{
+    uint32_t alpha = from & 0xff000000;
+    uint8_t r = i_lerp((from >> 16) & 0xff, (to >> 16) & 0xff, t);
+    uint8_t g = i_lerp((from >> 8) & 0xff, (to >> 8) & 0xff, t);
+    uint8_t b = i_lerp((from >> 0) & 0xff, (to >> 0) & 0xff, t);
+    return alpha | (r << 16) | (g << 8) | (b << 0);
+}
+
 static inline uint32_t
 color_blend_towards(uint32_t from, uint32_t to, float amount)
 {
@@ -3019,7 +3034,15 @@ render_scrollback_position(struct terminal *term)
 
     struct wl_window *win = term->window;
 
-    if (term->grid->view == term->grid->offset) {
+    /* An empty indicator only marks the position, which the
+     * scrollbar already does */
+    struct scrollbar_geometry sb_geom;
+    const bool redundant =
+        term->conf->scrollback.indicator.format == SCROLLBACK_INDICATOR_FORMAT_TEXT &&
+        term->conf->scrollback.indicator.text[0] == U'\0' &&
+        render_scrollbar_geometry(term, &sb_geom);
+
+    if (term->grid->view == term->grid->offset || redundant) {
         if (win->scrollback_indicator.surface.surf != NULL)
             wayl_win_subsurface_destroy(&win->scrollback_indicator);
         return;
@@ -3131,6 +3154,11 @@ render_scrollback_position(struct terminal *term)
 
     int x = term->width - margin - width;
     int y = term->margins.top + surf_top;
+
+    /* Stay clear of the scrollbar */
+    struct scrollbar_geometry sb;
+    if (render_scrollbar_geometry(term, &sb))
+        x -= sb.width;
 
     x = roundf(scale * ceilf(x / scale));
     y = roundf(scale * ceilf(y / scale));
@@ -3265,11 +3293,11 @@ render_tab_bar(struct terminal *term)
     const pixman_color_t active_bg = color_hex_to_pixman(_bg, gamma_correct);
     const pixman_color_t active_fg = color_hex_to_pixman(_fg, gamma_correct);
     const pixman_color_t inactive_bg = color_hex_to_pixman(
-        color_blend_towards(_bg, _fg, 0.12), gamma_correct);
+        color_mix(_bg, _fg, 0.12), gamma_correct);
     const pixman_color_t inactive_fg = color_hex_to_pixman(
-        color_blend_towards(_fg, _bg, 0.4), gamma_correct);
+        color_mix(_fg, _bg, 0.4), gamma_correct);
     const pixman_color_t separator = color_hex_to_pixman(
-        color_blend_towards(_bg, _fg, 0.3), gamma_correct);
+        color_mix(_bg, _fg, 0.3), gamma_correct);
 
     pixman_image_fill_rectangles(
         PIXMAN_OP_SRC, pix, &inactive_bg, 1,
@@ -3430,7 +3458,7 @@ render_confirm_box(struct terminal *term, struct buffer *buf)
     const pixman_color_t bg = color_hex_to_pixman(_bg, gamma_correct);
     const pixman_color_t fg = color_hex_to_pixman(_fg, gamma_correct);
     const pixman_color_t border_color = color_hex_to_pixman(
-        color_blend_towards(_bg, _fg, 0.4), gamma_correct);
+        color_mix(_bg, _fg, 0.4), gamma_correct);
 
     pixman_image_t *pix = buf->pix[0];
 
@@ -3493,20 +3521,77 @@ render_scrollbar_geometry(const struct terminal *term,
     g->x = term->width - g->width;
     g->y = roundf(scale * roundf(term->margins.top / scale));
 
-    if (g->width <= 0 || g->height <= 0 || g->x < 0)
+    /* Keep the thumb off the very top and bottom */
+    const int pad = roundf(2 * scale);
+    g->track_y = pad;
+    g->track_height = g->height - 2 * pad;
+
+    if (g->width <= 0 || g->track_height <= 0 || g->x < 0)
         return false;
 
     /* The thumb's size is the visible part of the scrollback */
-    const int min_thumb = min(g->height, max(2 * g->width, term->cell_height));
+    const int min_thumb = min(g->track_height, max(3 * g->width, term->cell_height));
     g->thumb_height = total_rows > term->rows
-        ? max(min_thumb, (int)((int64_t)g->height * term->rows / total_rows))
-        : g->height;
+        ? max(min_thumb, (int)((int64_t)g->track_height * term->rows / total_rows))
+        : g->track_height;
 
-    g->thumb_y = g->max_view_pos > 0
-        ? (int)((int64_t)(g->height - g->thumb_height) * g->view_pos / g->max_view_pos)
-        : 0;
+    g->thumb_y = g->track_y + (g->max_view_pos > 0
+        ? (int)((int64_t)(g->track_height - g->thumb_height) * g->view_pos / g->max_view_pos)
+        : 0);
 
     return true;
+}
+
+/*
+ * Fills a vertical "pill" (a rectangle with fully rounded ends),
+ * anti-aliased.
+ */
+static void
+fill_pill(pixman_image_t *pix, const pixman_color_t *color,
+          int x, int y, int width, int height)
+{
+    const float r = width / 2.;
+    const int cap = min((int)ceilf(r), height / 2);
+
+    /* Straight middle part */
+    if (height - 2 * cap > 0) {
+        pixman_image_fill_rectangles(
+            PIXMAN_OP_SRC, pix, color, 1,
+            &(pixman_rectangle16_t){x, y + cap, width, height - 2 * cap});
+    }
+
+    /* Rounded ends; 4x4 super-sampling per pixel */
+    for (int row = 0; row < cap; row++) {
+        for (int col = 0; col < width; col++) {
+            int inside = 0;
+            for (int sy = 0; sy < 4; sy++) {
+                for (int sx = 0; sx < 4; sx++) {
+                    const float px = col + (sx + .5) / 4 - r;
+                    const float py = row + (sy + .5) / 4 - r;
+                    if (px * px + py * py <= r * r)
+                        inside++;
+                }
+            }
+
+            if (inside == 0)
+                continue;
+
+            /* Pre-multiplied */
+            const uint32_t cov = inside * 0xffff / 16;
+            const pixman_color_t c = {
+                .red = color->red * cov / 0xffff,
+                .green = color->green * cov / 0xffff,
+                .blue = color->blue * cov / 0xffff,
+                .alpha = color->alpha * cov / 0xffff,
+            };
+
+            pixman_rectangle16_t px[2] = {
+                {x + col, y + row, 1, 1},                /* Top */
+                {x + col, y + height - 1 - row, 1, 1},   /* Bottom (mirrored) */
+            };
+            pixman_image_fill_rectangles(PIXMAN_OP_SRC, pix, &c, 2, px);
+        }
+    }
 }
 
 static void
@@ -3532,20 +3617,21 @@ render_scrollbar(struct terminal *term)
         return;
     }
 
-    /* Only the thumb is drawn in 'auto' mode; 'always' also shows the track */
-    const uint32_t _bg = term->colors.bg;
-    const uint32_t _fg = term->colors.fg;
-    const uint32_t track_color =
-        term->conf->scrollback.scrollbar == SCROLLBAR_ALWAYS
-            ? 0xffu << 24 | color_blend_towards(_bg, _fg, 0.08) : 0;
+    /* Slim by default; wider, and brighter, when hovered or dragged */
+    const bool active = sb->hover || sb->dragging;
+    const int thumb_width = active
+        ? max(1, g.width - (int)roundf(2 * term->scale))
+        : max(1, g.width / 2);
+
     const uint32_t thumb_color = 0xffu << 24 |
-        color_blend_towards(_bg, _fg, sb->dragging ? 0.7 : 0.45);
+        color_mix(term->colors.bg, term->colors.fg,
+                  sb->dragging ? 0.75 : sb->hover ? 0.6 : 0.35);
 
     if (sb->visible &&
         sb->x == g.x && sb->y == g.y &&
         sb->width == g.width && sb->height == g.height &&
         sb->thumb_y == g.thumb_y && sb->thumb_height == g.thumb_height &&
-        sb->track_color == track_color && sb->thumb_color == thumb_color)
+        sb->thumb_width == thumb_width && sb->thumb_color == thumb_color)
     {
         return;
     }
@@ -3554,20 +3640,18 @@ render_scrollbar(struct terminal *term)
         term->render.chains.scrollbar, g.width, g.height);
     pixman_image_t *pix = buf->pix[0];
 
-    const bool gamma_correct = wayl_do_linear_blending(term->wl, term->conf);
-    const pixman_color_t track = color_hex_to_pixman_with_alpha(
-        track_color, track_color >> 24 | (track_color >> 24 << 8), gamma_correct);
-    const pixman_color_t thumb = color_hex_to_pixman(thumb_color, gamma_correct);
-
+    /* No track; only the thumb is drawn */
     pixman_image_fill_rectangles(
-        PIXMAN_OP_SRC, pix, &track, 1,
+        PIXMAN_OP_SRC, pix, &(pixman_color_t){0}, 1,
         &(pixman_rectangle16_t){0, 0, g.width, g.height});
 
-    const int inset = g.width / 4;
-    pixman_image_fill_rectangles(
-        PIXMAN_OP_SRC, pix, &thumb, 1,
-        &(pixman_rectangle16_t){
-            inset, g.thumb_y, max(1, g.width - 2 * inset), g.thumb_height});
+    const bool gamma_correct = wayl_do_linear_blending(term->wl, term->conf);
+    const pixman_color_t thumb = color_hex_to_pixman(thumb_color, gamma_correct);
+
+    /* Right-aligned, with a small gap to the window edge */
+    const int gap = (g.width - thumb_width) / 2;
+    fill_pill(pix, &thumb, g.width - gap - thumb_width, g.thumb_y,
+              thumb_width, g.thumb_height);
 
     wl_subsurface_set_position(
         sb->surface.sub, roundf(g.x / term->scale), roundf(g.y / term->scale));
@@ -3583,7 +3667,7 @@ render_scrollbar(struct terminal *term)
     sb->height = g.height;
     sb->thumb_y = g.thumb_y;
     sb->thumb_height = g.thumb_height;
-    sb->track_color = track_color;
+    sb->thumb_width = thumb_width;
     sb->thumb_color = thumb_color;
 }
 
@@ -6032,19 +6116,20 @@ UNITTEST
     xassert(render_scrollbar_geometry(&term, &g));
     xassert(g.x == 92 && g.width == 8);
     xassert(g.height == 40);
+    xassert(g.track_y == 2 && g.track_height == 36);
     xassert(g.view_pos == 8 && g.max_view_pos == 8);
-    xassert(g.thumb_height == 16);  /* 4/12 of 40 is 13, but min is 2*width */
-    xassert(g.thumb_y == 40 - 16);
+    xassert(g.thumb_height == 24);  /* 4/12 of 36 is 12, but min is 3*width */
+    xassert(g.thumb_y == 2 + 36 - 24);
 
     /* At the top of the scrollback */
     term.normal.view = 0;
     xassert(render_scrollbar_geometry(&term, &g));
-    xassert(g.view_pos == 0 && g.thumb_y == 0);
+    xassert(g.view_pos == 0 && g.thumb_y == 2);
 
     /* Halfway */
     term.normal.view = 4;
     xassert(render_scrollbar_geometry(&term, &g));
-    xassert(g.view_pos == 4 && g.thumb_y == (40 - 16) / 2);
+    xassert(g.view_pos == 4 && g.thumb_y == 2 + (36 - 24) / 2);
 
     /* No scrollback on the alternate screen */
     term.grid = &term.alt;

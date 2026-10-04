@@ -27,6 +27,7 @@ void render_refresh_full(struct terminal *term);
 struct scrollbar_geometry {
     int x, y;            /* Position, relative to the window */
     int width, height;
+    int track_y, track_height;  /* The part the thumb moves within */
     int thumb_y, thumb_height;
     int view_pos;        /* Viewport position in the scrollback */
     int max_view_pos;    /* View position when at the bottom */
