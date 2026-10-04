@@ -1970,7 +1970,7 @@ render_overlay_single_pixel(struct terminal *term, enum overlay_style style,
     }
 }
 
-static void render_confirm_close_box(struct terminal *term, struct buffer *buf);
+static void render_confirm_box(struct terminal *term, struct buffer *buf);
 
 void
 render_overlay(struct terminal *term)
@@ -1979,7 +1979,8 @@ render_overlay(struct terminal *term)
     const bool unicode_mode_active = term->unicode_mode.active;
 
     const enum overlay_style style =
-        term->window->confirm_close ? OVERLAY_CONFIRM_CLOSE :
+        term->window->confirm_close || term->paste_confirm.active
+            ? OVERLAY_CONFIRM :
         term->is_searching ? OVERLAY_SEARCH :
         term->flash.active ? OVERLAY_FLASH :
         unicode_mode_active ? OVERLAY_UNICODE_MODE :
@@ -2001,7 +2002,7 @@ render_overlay(struct terminal *term)
     switch (style) {
     case OVERLAY_SEARCH:
     case OVERLAY_UNICODE_MODE:
-    case OVERLAY_CONFIRM_CLOSE:
+    case OVERLAY_CONFIRM:
         color = (pixman_color_t){0, 0, 0, 0x7fff};
         break;
 
@@ -2150,7 +2151,7 @@ render_overlay(struct terminal *term)
         pixman_region32_fini(&damage);
     }
 
-    else if (style != OVERLAY_CONFIRM_CLOSE &&
+    else if (style != OVERLAY_CONFIRM &&
              buf == term->render.last_overlay_buf &&
              style == term->render.last_overlay_style)
     {
@@ -2166,8 +2167,8 @@ render_overlay(struct terminal *term)
         PIXMAN_OP_SRC, buf->pix[0], &color, 1,
         &(pixman_rectangle16_t){0, 0, term->width, term->height});
 
-    if (style == OVERLAY_CONFIRM_CLOSE)
-        render_confirm_close_box(term, buf);
+    if (style == OVERLAY_CONFIRM)
+        render_confirm_box(term, buf);
 
     quirk_weston_subsurface_desync_on(overlay->sub);
     wayl_surface_scale(
@@ -3364,9 +3365,12 @@ render_tab_bar(struct terminal *term)
     wl_surface_commit(surf->surface.surf);
 }
 
-/* Centered dialog, asking the user to confirm closing all tabs */
+/*
+ * Centered dialog, asking the user a yes/no question: confirming
+ * closing all tabs, or confirming a paste.
+ */
 static void
-render_confirm_close_box(struct terminal *term, struct buffer *buf)
+render_confirm_box(struct terminal *term, struct buffer *buf)
 {
     struct fcft_font *font = term->fonts[0];
     if (font == NULL)
@@ -3380,24 +3384,41 @@ render_confirm_close_box(struct terminal *term, struct buffer *buf)
     if (max_text_width <= 0)
         return;
 
-    char *msg = xasprintf(
-        "You have %zu tabs open. Close the window?",
-        tll_length(term->window->tabs));
-    char32_t *question = ambstoc32(msg);
-    free(msg);
+    /* Question (up to two lines), then the answers */
+    char *msgs[2] = {NULL};
 
-    if (question == NULL)
-        return;
+    if (term->window->confirm_close) {
+        msgs[0] = xasprintf(
+            "You have %zu tabs open. Close the window?",
+            tll_length(term->window->tabs));
+    } else {
+        const size_t lines = term->paste_confirm.lines;
+        msgs[0] = xasprintf(
+            "Paste %zu line%s of text?", lines, lines == 1 ? "" : "s");
+        if (!term->bracketed_paste)
+            msgs[1] = xstrdup("Each line will run as a command when pasted.");
+    }
 
-    int question_width, answers_width;
-    char32_t *line1 = ellipsize(
-        term, font, question, max_text_width, false, &question_width);
-    char32_t *line2 = ellipsize(
-        term, font, U"[Y]es / [N]o", max_text_width, false, &answers_width);
-    free(question);
+    const size_t msg_count = msgs[1] != NULL ? 2 : 1;
+    char32_t *lines[3] = {NULL};
+    int widths[3] = {0};
+    int max_width = 0;
 
-    const int box_width = max(question_width, answers_width) + 2 * pad_x;
-    const int box_height = 2 * line_height + line_height / 2 + 2 * pad_y;
+    for (size_t i = 0; i < msg_count + 1; i++) {
+        char32_t *text = i < msg_count ? ambstoc32(msgs[i]) : c32dup(U"[Y]es / [N]o");
+        lines[i] = ellipsize(
+            term, font, text != NULL ? text : U"", max_text_width, false, &widths[i]);
+        max_width = max(max_width, widths[i]);
+        free(text);
+    }
+
+    free(msgs[0]);
+    free(msgs[1]);
+
+    /* Half a line between the question and the answers */
+    const int box_width = max_width + 2 * pad_x;
+    const int box_height =
+        (msg_count + 1) * line_height + line_height / 2 + 2 * pad_y;
     const int box_x = max(0, (term->width - box_width) / 2);
     const int box_y = max(0, (term->height - box_height) / 2);
     const int border = max(1, (int)roundf(term->scale));
@@ -3427,17 +3448,17 @@ render_confirm_close_box(struct terminal *term, struct buffer *buf)
     pixman_image_set_clip_region32(pix, &clip);
     pixman_region32_fini(&clip);
 
-    render_text_line(
-        term, pix, font, line1, &fg,
-        box_x + (box_width - question_width) / 2, box_y + pad_y, line_height);
-    render_text_line(
-        term, pix, font, line2, &fg,
-        box_x + (box_width - answers_width) / 2,
-        box_y + pad_y + line_height + line_height / 2, line_height);
+    for (size_t i = 0; i < msg_count + 1; i++) {
+        const int y = box_y + pad_y + i * line_height +
+            (i == msg_count ? line_height / 2 : 0);
+
+        render_text_line(
+            term, pix, font, lines[i], &fg,
+            box_x + (box_width - widths[i]) / 2, y, line_height);
+        free(lines[i]);
+    }
 
     pixman_image_set_clip_region32(pix, NULL);
-    free(line1);
-    free(line2);
 }
 
 static void

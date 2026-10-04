@@ -370,7 +370,7 @@ enum overlay_style {
     OVERLAY_SEARCH,
     OVERLAY_FLASH,
     OVERLAY_UNICODE_MODE,
-    OVERLAY_CONFIRM_CLOSE,
+    OVERLAY_CONFIRM,
 };
 
 typedef tll(struct ptmx_buffer) ptmx_buffer_list_t;
@@ -502,6 +502,17 @@ struct terminal {
     } custom_glyphs;
 
     bool is_sending_paste_data;
+
+    /* Paste data is buffered, to decide whether to ask the user
+     * before sending it (security.confirm-paste) */
+    struct {
+        bool buffering;
+        bool active;  /* Asking the user */
+        char *data;
+        size_t len;
+        size_t sz;
+        size_t lines;
+    } paste_confirm;
     ptmx_buffer_list_t ptmx_buffers;
     ptmx_buffer_list_t ptmx_paste_buffers;
 

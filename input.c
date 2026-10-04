@@ -1702,6 +1702,12 @@ key_press_release(struct seat *seat, struct terminal *term, uint32_t serial,
         return;
     }
 
+    else if (term->paste_confirm.active) {
+        if (pressed)
+            selection_paste_confirm_input(term, sym);
+        return;
+    }
+
     else if (term->unicode_mode.active) {
         if (pressed)
             unicode_mode_input(seat, term, sym);

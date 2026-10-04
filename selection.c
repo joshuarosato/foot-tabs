@@ -2413,27 +2413,177 @@ text_from_clipboard(struct seat *seat, struct terminal *term,
         term, no_strip, read_fd, clipboard->mime_type, cb, done, user);
 }
 
+/*
+ * Starts a paste. Unless the user has disabled paste confirmations,
+ * the pasted data is buffered, and sent (or confirmed) once it has
+ * been received in its entirety.
+ */
+static void
+paste_begin(struct terminal *term)
+{
+    xassert(!term->is_sending_paste_data);
+    term->is_sending_paste_data = true;
+
+    term->paste_confirm.buffering =
+        term->conf->security.confirm_paste != CONFIRM_PASTE_NEVER;
+    term->paste_confirm.len = 0;
+
+    if (!term->paste_confirm.buffering && term->bracketed_paste)
+        term_paste_data_to_slave(term, "\033[200~", 6);
+}
+
+static void
+paste_end(struct terminal *term)
+{
+    term->is_sending_paste_data = false;
+
+    /* Make sure we send any queued up non-paste data */
+    if (tll_length(term->ptmx_buffers) > 0)
+        fdm_event_add(term->fdm, term->ptmx, EPOLLOUT);
+}
+
+static void
+paste_discard_buffer(struct terminal *term)
+{
+    free(term->paste_confirm.data);
+    term->paste_confirm.data = NULL;
+    term->paste_confirm.len = term->paste_confirm.sz = 0;
+    term->paste_confirm.lines = 0;
+}
+
+static void
+paste_send_buffer(struct terminal *term)
+{
+    if (term->bracketed_paste)
+        term_paste_data_to_slave(term, "\033[200~", 6);
+    if (term->paste_confirm.len > 0)
+        term_paste_data_to_slave(term, term->paste_confirm.data, term->paste_confirm.len);
+    if (term->bracketed_paste)
+        term_paste_data_to_slave(term, "\033[201~", 6);
+
+    paste_discard_buffer(term);
+    paste_end(term);
+}
+
+/*
+ * Pasted newlines are sent as-is in bracketed paste mode. Otherwise,
+ * they are converted to carriage returns (i.e. Enter), and each line
+ * is executed by e.g. a shell, as soon as it has been pasted.
+ */
+static size_t
+paste_count_newlines(const char *data, size_t len)
+{
+    size_t count = 0;
+    for (size_t i = 0; i < len; i++) {
+        if (data[i] == '\n' ||
+            (data[i] == '\r' && (i + 1 >= len || data[i + 1] != '\n')))
+        {
+            count++;
+        }
+    }
+    return count;
+}
+
+static bool
+paste_needs_confirmation(const struct terminal *term)
+{
+    const char *data = term->paste_confirm.data;
+    const size_t len = term->paste_confirm.len;
+
+    if (paste_count_newlines(data, len) == 0)
+        return false;
+
+    switch (term->conf->security.confirm_paste) {
+    case CONFIRM_PASTE_NEVER:     return false;
+    case CONFIRM_PASTE_UNSAFE:    return !term->bracketed_paste;
+    case CONFIRM_PASTE_MULTILINE: return true;
+    }
+
+    return true;
+}
+
+void
+selection_paste_confirm_input(struct terminal *term, xkb_keysym_t sym)
+{
+    xassert(term->paste_confirm.active);
+
+    switch (sym) {
+    case XKB_KEY_y:
+    case XKB_KEY_Y:
+    case XKB_KEY_Return:
+    case XKB_KEY_KP_Enter:
+        term->paste_confirm.active = false;
+        paste_send_buffer(term);
+        render_refresh(term);
+        break;
+
+    case XKB_KEY_n:
+    case XKB_KEY_N:
+    case XKB_KEY_Escape:
+        term->paste_confirm.active = false;
+        paste_discard_buffer(term);
+        paste_end(term);
+        render_refresh(term);
+        break;
+    }
+}
+
 static void
 receive_offer(char *data, size_t size, void *user)
 {
     struct terminal *term = user;
     xassert(term->is_sending_paste_data);
-    term_paste_data_to_slave(term, data, size);
+
+    if (!term->paste_confirm.buffering) {
+        term_paste_data_to_slave(term, data, size);
+        return;
+    }
+
+    __typeof__(term->paste_confirm) *pc = &term->paste_confirm;
+
+    if (pc->len + size > pc->sz) {
+        pc->sz = max(pc->sz * 2, pc->len + size);
+        pc->data = xrealloc(pc->data, pc->sz);
+    }
+
+    memcpy(&pc->data[pc->len], data, size);
+    pc->len += size;
 }
 
 static void
 receive_offer_done(void *user)
 {
     struct terminal *term = user;
+    __typeof__(term->paste_confirm) *pc = &term->paste_confirm;
 
-    if (term->bracketed_paste)
-        term_paste_data_to_slave(term, "\033[201~", 6);
+    if (!pc->buffering) {
+        if (term->bracketed_paste)
+            term_paste_data_to_slave(term, "\033[201~", 6);
+        paste_end(term);
+        return;
+    }
 
-    term->is_sending_paste_data = false;
+    pc->buffering = false;
 
-    /* Make sure we send any queued up non-paste data */
-    if (tll_length(term->ptmx_buffers) > 0)
-        fdm_event_add(term->fdm, term->ptmx, EPOLLOUT);
+    if (term->shutdown.in_progress) {
+        paste_discard_buffer(term);
+        paste_end(term);
+        return;
+    }
+
+    if (!paste_needs_confirmation(term)) {
+        paste_send_buffer(term);
+        return;
+    }
+
+    /* A trailing newline doesn't start another line */
+    const size_t newlines = paste_count_newlines(pc->data, pc->len);
+    const char last = pc->data[pc->len - 1];
+    pc->lines = newlines + (last == '\n' || last == '\r' ? 0 : 1);
+
+    /* Ask; selection_paste_confirm_input() sends, or discards, it */
+    pc->active = true;
+    render_refresh(term);
 }
 
 void
@@ -2448,10 +2598,7 @@ selection_from_clipboard(struct seat *seat, struct terminal *term, uint32_t seri
     if (clipboard->data_offer == NULL)
         return;
 
-    term->is_sending_paste_data = true;
-
-    if (term->bracketed_paste)
-        term_paste_data_to_slave(term, "\033[200~", 6);
+    paste_begin(term);
 
     text_from_clipboard(
         seat, term, false, &receive_offer, &receive_offer_done, term);
@@ -2583,9 +2730,7 @@ selection_from_primary(struct seat *seat, struct terminal *term)
     if (primary->data_offer == NULL)
         return;
 
-    term->is_sending_paste_data = true;
-    if (term->bracketed_paste)
-        term_paste_data_to_slave(term, "\033[200~", 6);
+    paste_begin(term);
 
     text_from_primary(
         seat, term, false, &receive_offer, &receive_offer_done, term);
@@ -2872,10 +3017,7 @@ drop(void *data, struct wl_data_device *wl_data_device)
     /* Don't keep our copy of the write-end open (or we'll never get EOF) */
     close(write_fd);
 
-    term->is_sending_paste_data = true;
-
-    if (term->bracketed_paste)
-        term_paste_data_to_slave(term, "\033[200~", 6);
+    paste_begin(term);
 
     begin_receive_clipboard(
         term, false, read_fd, clipboard->mime_type,
@@ -2963,3 +3105,101 @@ const struct zwp_primary_selection_device_v1_listener primary_selection_device_l
     .selection = &primary_selection,
 };
 
+
+
+static void UNUSED
+test_paste(struct terminal *term, const char *text)
+{
+    paste_begin(term);
+    receive_offer((char *)text, strlen(text), term);
+    receive_offer_done(term);
+}
+
+static const char * UNUSED
+test_received(int fd, char *buf, size_t size)
+{
+    ssize_t n = read(fd, buf, size - 1);
+    buf[n > 0 ? n : 0] = '\0';
+    return buf;
+}
+
+UNITTEST
+{
+    /* Paste confirmation (security.confirm-paste) */
+    struct config conf = {0};
+    struct grid grid = {0};
+    struct wl_window win = {0};
+
+    int chan[2];
+    xassert(pipe2(chan, O_CLOEXEC | O_NONBLOCK) == 0);
+
+    struct terminal term = {
+        .conf = &conf,
+        .grid = &grid,
+        .window = &win,
+        .ptmx = chan[1],
+    };
+
+    char received[256];
+    /* unsafe: single lines are sent immediately */
+    conf.security.confirm_paste = CONFIRM_PASTE_UNSAFE;
+    test_paste(&term, "echo hello");
+    xassert(!term.paste_confirm.active);
+    xassert(!term.is_sending_paste_data);
+    xassert(streq(test_received(chan[0], received, sizeof(received)), "echo hello"));
+
+    /* unsafe: multiple lines, without bracketed paste, are held back */
+    test_paste(&term, "echo one\recho two\r");
+    xassert(term.paste_confirm.active);
+    xassert(term.paste_confirm.lines == 2);
+    xassert(term.is_sending_paste_data);
+    xassert(streq(test_received(chan[0], received, sizeof(received)), ""));
+
+    /* ...and discarded on 'n' */
+    selection_paste_confirm_input(&term, XKB_KEY_n);
+    xassert(!term.paste_confirm.active);
+    xassert(!term.is_sending_paste_data);
+    xassert(term.paste_confirm.data == NULL);
+    xassert(streq(test_received(chan[0], received, sizeof(received)), ""));
+
+    /* ...or sent on 'y' */
+    test_paste(&term, "echo one\recho two");
+    xassert(term.paste_confirm.active);
+    xassert(term.paste_confirm.lines == 2);
+    selection_paste_confirm_input(&term, XKB_KEY_y);
+    xassert(!term.paste_confirm.active);
+    xassert(!term.is_sending_paste_data);
+    xassert(streq(test_received(chan[0], received, sizeof(received)), "echo one\recho two"));
+
+    /* Other keys are ignored */
+    test_paste(&term, "a\nb");
+    selection_paste_confirm_input(&term, XKB_KEY_x);
+    xassert(term.paste_confirm.active);
+    selection_paste_confirm_input(&term, XKB_KEY_Escape);
+    xassert(!term.paste_confirm.active);
+    xassert(streq(test_received(chan[0], received, sizeof(received)), ""));
+
+    /* unsafe: multiple lines *with* bracketed paste are sent */
+    term.bracketed_paste = true;
+    test_paste(&term, "a\nb\n");
+    xassert(!term.paste_confirm.active);
+    xassert(streq(test_received(chan[0], received, sizeof(received)), "\033[200~a\nb\n\033[201~"));
+
+    /* multiline: always asks for multiple lines */
+    conf.security.confirm_paste = CONFIRM_PASTE_MULTILINE;
+    test_paste(&term, "a\nb\n");
+    xassert(term.paste_confirm.active);
+    selection_paste_confirm_input(&term, XKB_KEY_Return);
+    xassert(streq(test_received(chan[0], received, sizeof(received)), "\033[200~a\nb\n\033[201~"));
+
+    /* never: streamed as-is, never buffered */
+    conf.security.confirm_paste = CONFIRM_PASTE_NEVER;
+    term.bracketed_paste = false;
+    test_paste(&term, "a\rb\r");
+    xassert(!term.paste_confirm.active);
+    xassert(term.paste_confirm.data == NULL);
+    xassert(streq(test_received(chan[0], received, sizeof(received)), "a\rb\r"));
+
+    close(chan[0]);
+    close(chan[1]);
+}

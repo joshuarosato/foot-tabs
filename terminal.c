@@ -1931,6 +1931,7 @@ term_destroy(struct terminal *term)
     tll_free_and_free(term->window_title_stack, free);
     free(term->tab.title);
     free(term->tab.rename.buf);
+    free(term->paste_confirm.data);
 
     for (size_t i = 0; i < sizeof(term->fonts) / sizeof(term->fonts[0]); i++)
         fcft_destroy(term->fonts[i]);

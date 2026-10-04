@@ -85,6 +85,11 @@
   double-click to rename, middle-click to close, and scroll to cycle
   tabs. A window
   can have at most 9 tabs.
+* `security.confirm-paste` option. When pasting text with multiple
+  lines, ask for confirmation before sending it: `never`, `unsafe`
+  (the default; only when the application has not enabled bracketed
+  paste, i.e. when each line would be executed immediately), or
+  `multiline`.
 * `transparency-toggle` key binding (unbound by default), toggling
   background transparency on and off, for all tabs in the window.
 * `[tabs]` section, with the options:

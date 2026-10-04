@@ -297,6 +297,12 @@ struct config {
             OSC52_PASTE_ENABLED,
             OSC52_ENABLED,
         } osc52;
+
+        enum {
+            CONFIRM_PASTE_NEVER,
+            CONFIRM_PASTE_UNSAFE,
+            CONFIRM_PASTE_MULTILINE,
+        } confirm_paste;
     } security;
 
     struct {

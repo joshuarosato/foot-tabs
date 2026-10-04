@@ -534,6 +534,26 @@ Note: do not set *TERM* here; use the *term* option in the main
 	
 	Default: _enabled_
 
+*confirm-paste*
+	When to ask for confirmation before pasting text (from the
+	clipboard, the primary selection, or by drag-and-drop) that
+	contains more than one line. One of:
+	
+	- *never*: never ask.
+	- *unsafe*: ask if the application has not enabled bracketed
+	  paste mode. Without it, each pasted newline is sent as *Enter*,
+	  and a shell executes each line as soon as it is pasted.
+	- *multiline*: always ask, for text with newlines.
+	
+	While asking, all keyboard input goes to the question. Answer
+	with *y* or *Enter* to paste, or *n* or *Escape* to discard the
+	text.
+	
+	Note that foot always removes control characters (such as
+	*ESC*) from pasted text.
+	
+	Default: _unsafe_
+
 
 # SECTION: bell
 
