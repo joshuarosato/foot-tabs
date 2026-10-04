@@ -162,6 +162,11 @@ tab_activate(struct terminal *new)
 
     win->term = new;
 
+    /* Font size changes in one tab apply to all tabs. Must be done
+     * before resizing, since it changes the cell size */
+    if (new->conf->tabs.shared_font_size && !new->shutdown.in_progress)
+        term_font_size_copy(new, old);
+
     /* A new tab doesn't have a grid until it has been sized; must be
      * done before giving it keyboard focus */
     if (!new->shutdown.in_progress && logical_width > 0. && logical_height > 0.)

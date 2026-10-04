@@ -90,6 +90,8 @@
     `[main].confirm-close-tabs` (deprecated, but still accepted).
   - `new-tab-position`: open new tabs after the current tab (the
     default), or after the last tab.
+  - `shared-font-size`: font size changes apply to all tabs in the
+    window (the default), or only the current tab.
 
 
 ### Changed

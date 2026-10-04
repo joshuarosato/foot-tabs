@@ -1168,6 +1168,44 @@ load_fonts_from_conf(struct terminal *term)
     return reload_fonts(term, true);
 }
 
+/*
+ * Copies the (run-time adjusted) font sizes of another terminal, and
+ * reloads the fonts if they differ. The grid is *not* resized; the
+ * caller is expected to resize the terminal. Returns true if the
+ * fonts were reloaded.
+ */
+bool
+term_font_size_copy(struct terminal *dst, const struct terminal *src)
+{
+    bool differs = false;
+
+    for (size_t i = 0; i < 4; i++) {
+        const size_t count = dst->conf->fonts[i].count;
+
+        /* Can only copy between terminals using the same fonts */
+        if (src->conf->fonts[i].count != count)
+            return false;
+
+        for (size_t j = 0; j < count; j++) {
+            const struct config_font *d = &dst->font_sizes[i][j];
+            const struct config_font *s = &src->font_sizes[i][j];
+
+            if (d->pt_size != s->pt_size || d->px_size != s->px_size)
+                differs = true;
+        }
+    }
+
+    if (!differs)
+        return false;
+
+    for (size_t i = 0; i < 4; i++) {
+        memcpy(dst->font_sizes[i], src->font_sizes[i],
+               dst->conf->fonts[i].count * sizeof(dst->font_sizes[i][0]));
+    }
+
+    return reload_fonts(dst, false);
+}
+
 static void fdm_client_terminated(
     struct reaper *reaper, pid_t pid, int status, void *data);
 

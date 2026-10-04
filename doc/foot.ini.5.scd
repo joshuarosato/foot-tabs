@@ -1283,6 +1283,13 @@ section.
 	
 	Default: _after-current_.
 
+*shared-font-size*
+	Boolean. When enabled, changing the font size (with the
+	*font-increase*, *font-decrease* and *font-reset* key bindings)
+	applies to all tabs in the window, and new tabs use the current
+	font size. When disabled, each tab has its own font size.
+	Default: _yes_.
+
 *confirm-close*
 	Boolean. When enabled, closing a window that has more than one
 	tab (e.g. from the compositor, the window's close button, or the
