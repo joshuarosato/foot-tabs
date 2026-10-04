@@ -3571,10 +3571,24 @@ mouse_scroll_multiplier(const struct terminal *term, const struct seat *seat)
 }
 
 /*
- * Scrolling over the tab bar switches tab. Unlike regular scrolling,
- * this is *not* affected by the scrollback multiplier, and is done
- * at most one tab at a time; accumulate until we have a full step
- * (e.g. a wheel notch), switch tab, and then throw away the rest.
+ * Adds 'delta' to the accumulated scroll amount, and returns the
+ * number of whole steps (negative when scrolling backwards) in it.
+ * The remainder is kept, for the next event.
+ */
+static int
+scroll_steps(double *aggregated, double delta, double step)
+{
+    *aggregated += delta;
+
+    const int steps = (int)(*aggregated / step);  /* Rounds towards zero */
+    *aggregated -= steps * step;
+    return steps;
+}
+
+/*
+ * Scrolling over the tab bar switches tab, one tab per step (e.g. a
+ * wheel notch). Unlike regular scrolling, this is *not* affected by
+ * the scrollback multiplier.
  */
 static bool
 tab_bar_scroll(struct seat *seat, double *aggregated, double delta,
@@ -3585,15 +3599,34 @@ tab_bar_scroll(struct seat *seat, double *aggregated, double delta,
     if (term->active_surface != TERM_SURF_TAB_BAR)
         return false;
 
-    *aggregated += delta;
-
-    if (fabs(*aggregated) >= step) {
-        const int direction = *aggregated > 0 ? 1 : -1;
-        *aggregated = 0.;
-        tab_cycle(term->window, direction);
-    }
+    const int steps = scroll_steps(aggregated, delta, step);
+    if (steps != 0)
+        tab_cycle(term->window, steps);
 
     return true;
+}
+
+UNITTEST
+{
+    double agg = 0.;
+
+    /* One notch per 120 */
+    xassert(scroll_steps(&agg, 120., 120.) == 1 && agg == 0.);
+
+    /* Several notches in one event */
+    xassert(scroll_steps(&agg, 240., 120.) == 2 && agg == 0.);
+    xassert(scroll_steps(&agg, -240., 120.) == -2 && agg == 0.);
+
+    /* High-resolution wheel: 4 x 90 is 3 notches, nothing lost */
+    xassert(scroll_steps(&agg, 90., 120.) == 0);
+    xassert(scroll_steps(&agg, 90., 120.) == 1 && agg == 60.);
+    xassert(scroll_steps(&agg, 90., 120.) == 1 && agg == 30.);
+    xassert(scroll_steps(&agg, 90., 120.) == 1 && agg == 0.);
+
+    /* Changing direction cancels out what's left */
+    xassert(scroll_steps(&agg, 90., 120.) == 0);
+    xassert(scroll_steps(&agg, -90., 120.) == 0 && agg == 0.);
+    xassert(scroll_steps(&agg, -150., 120.) == -1 && agg == -30.);
 }
 
 static void
