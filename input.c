@@ -3411,12 +3411,6 @@ mouse_scroll(struct seat *seat, int amount, enum wl_pointer_axis axis)
     struct terminal *term = seat->mouse_focus;
     xassert(term != NULL);
 
-    if (term->active_surface == TERM_SURF_TAB_BAR) {
-        if (amount != 0)
-            tab_cycle(term->window, amount > 0 ? 1 : -1);
-        return;
-    }
-
     int button = axis == WL_POINTER_AXIS_VERTICAL_SCROLL
         ? amount < 0 ? BTN_WHEEL_BACK : BTN_WHEEL_FORWARD
         : amount < 0 ? BTN_WHEEL_LEFT : BTN_WHEEL_RIGHT;
@@ -3463,6 +3457,32 @@ mouse_scroll_multiplier(const struct terminal *term, const struct seat *seat)
         : 1.0;
 }
 
+/*
+ * Scrolling over the tab bar switches tab. Unlike regular scrolling,
+ * this is *not* affected by the scrollback multiplier, and is done
+ * at most one tab at a time; accumulate until we have a full step
+ * (e.g. a wheel notch), switch tab, and then throw away the rest.
+ */
+static bool
+tab_bar_scroll(struct seat *seat, double *aggregated, double delta,
+               double step)
+{
+    struct terminal *term = seat->mouse_focus;
+
+    if (term->active_surface != TERM_SURF_TAB_BAR)
+        return false;
+
+    *aggregated += delta;
+
+    if (fabs(*aggregated) >= step) {
+        const int direction = *aggregated > 0 ? 1 : -1;
+        *aggregated = 0.;
+        tab_cycle(term->window, direction);
+    }
+
+    return true;
+}
+
 static void
 wl_pointer_axis(void *data, struct wl_pointer *wl_pointer,
                 uint32_t time, uint32_t axis, wl_fixed_t value)
@@ -3477,6 +3497,12 @@ wl_pointer_axis(void *data, struct wl_pointer *wl_pointer,
 
     xassert(seat->mouse_focus != NULL);
     xassert(axis < ALEN(seat->mouse.aggregated));
+
+    if (tab_bar_scroll(seat, &seat->mouse.aggregated[axis],
+                       wl_fixed_to_double(value), 50.))
+    {
+        return;
+    }
 
     const struct terminal *term = seat->mouse_focus;
 
@@ -3507,6 +3533,13 @@ wl_pointer_axis_discrete(void *data, struct wl_pointer *wl_pointer,
         return;
 
     seat->mouse.have_discrete = true;
+
+    if (tab_bar_scroll(seat, &seat->mouse.aggregated_120[axis],
+                       discrete * 120., 120.))
+    {
+        return;
+    }
+
     int amount = discrete;
 
     if (axis == WL_POINTER_AXIS_HORIZONTAL_SCROLL) {
@@ -3547,6 +3580,12 @@ wl_pointer_axis_value120(void *data, struct wl_pointer *wl_pointer,
      * keep what's left (this value will always be less than the
      * per-line value).
      */
+    if (tab_bar_scroll(seat, &seat->mouse.aggregated_120[axis],
+                       value120, 120.))
+    {
+        return;
+    }
+
     const double multiplier = mouse_scroll_multiplier(seat->mouse_focus, seat);
     const double per_line = 120. / multiplier;
 
