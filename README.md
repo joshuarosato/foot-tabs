@@ -2,6 +2,29 @@
 
 The fast, lightweight and minimalistic Wayland terminal emulator.
 
+> [!NOTE]
+> **This is foot-tabs, an unofficial fork of
+> [foot](https://codeberg.org/dnkl/foot) that adds tabs.** It is not
+> affiliated with, or supported by, the foot project; please report
+> issues with tabs [here](https://github.com/joshuarosato/foot-tabs/issues),
+> not upstream.
+>
+> - <kbd>ctrl</kbd>+<kbd>shift</kbd>+<kbd>t</kbd> new tab,
+>   <kbd>ctrl</kbd>+<kbd>shift</kbd>+<kbd>w</kbd> close tab
+> - <kbd>ctrl</kbd>+<kbd>page down</kbd>/<kbd>page up</kbd> next/previous
+>   tab, <kbd>ctrl</kbd>+<kbd>1</kbd>..<kbd>9</kbd> go to tab
+> - <kbd>ctrl</kbd>+<kbd>shift</kbd>+<kbd>page down</kbd>/<kbd>page up</kbd>
+>   move tab
+> - Tab bar: click to switch, double-click to rename, middle-click to
+>   close, scroll to cycle
+> - Closing a window with several tabs asks for confirmation
+>   (`confirm-close-tabs`)
+>
+> See `tab-*` in **foot.ini**(5) for all options. Arch Linux users can
+> install [`foot-tabs`](https://aur.archlinux.org/packages/foot-tabs) or
+> [`foot-tabs-git`](https://aur.archlinux.org/packages/foot-tabs-git) from
+> the AUR.
+
 [![CI status](https://ci.codeberg.org/api/badges/dnkl/foot/status.svg)](https://ci.codeberg.org/dnkl/foot)
 
 [![Packaging status](https://repology.org/badge/vertical-allrepos/foot.svg?columns=4)](https://repology.org/project/foot/versions)
