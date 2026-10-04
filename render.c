@@ -3224,6 +3224,12 @@ ellipsize(const struct terminal *term, struct fcft_font *font,
     const int ellipsis_width = glyph_advance(term, font, U'…');
     const int avail = max_width - ellipsis_width;
 
+    if (avail < 0) {
+        /* Not even room for the ellipsis */
+        *width = 0;
+        return c32dup(U"");
+    }
+
     int used = 0;
     size_t count = 0;
 

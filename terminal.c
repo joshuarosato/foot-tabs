@@ -1182,7 +1182,11 @@ term_font_size_copy(struct terminal *dst, const struct terminal *src)
     for (size_t i = 0; i < 4; i++) {
         const size_t count = dst->conf->fonts[i].count;
 
-        /* Can only copy between terminals using the same fonts */
+        /*
+         * Font sizes are per font, so the font lists must match. We
+         * only verify the number of fonts; tabs in a window are
+         * created with clones of the same configuration.
+         */
         if (src->conf->fonts[i].count != count)
             return false;
 
