@@ -362,6 +362,7 @@ enum term_surface {
     TERM_SURF_BUTTON_MINIMIZE,
     TERM_SURF_BUTTON_MAXIMIZE,
     TERM_SURF_BUTTON_CLOSE,
+    TERM_SURF_TAB_BAR,
 };
 
 enum overlay_style {
@@ -648,6 +649,7 @@ struct terminal {
             struct buffer_chain *url;
             struct buffer_chain *csd;
             struct buffer_chain *overlay;
+            struct buffer_chain *tab_bar;
         } chains;
 
         /* Scheduled for rendering, as soon-as-possible */
@@ -844,6 +846,7 @@ struct terminal *term_init(
     struct wayland *wayl, const char *foot_exe, const char *cwd,
     const char *token, const char *pty_path,
     int argc, char *const *argv, const char *const *envp,
+    struct wl_window *tab_window,
     void (*shutdown_cb)(void *data, int exit_code), void *shutdown_data);
 
 bool term_shutdown(struct terminal *term);

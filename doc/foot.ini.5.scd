@@ -1509,7 +1509,31 @@ e.g. *search-start=none*.
 	Default: _none_
 
 *quit*
-	Quit foot. Default: _none_.
+	Quit foot, closing all tabs in the window. Default: _none_.
+
+*tab-new*
+	Opens a new tab in the current window. The new tab runs the
+	configured *shell*. If the shell has been configured to emit the
+	OSC 7 escape sequence, the new tab will start in the current
+	working directory.
+	
+	A tab bar is shown at the top of the window whenever it has more
+	than one tab. It uses the *font* and *size* options from the
+	*csd* section. Click on a tab to switch to it.
+	
+	Default: _Control+Shift+t_.
+
+*tab-close*
+	Closes the current tab. Closing the last tab closes the
+	window. Default: _Control+Shift+w_.
+
+*tab-next*, *tab-prev*
+	Switches to the next, or previous, tab. Wraps around at the
+	first and last tab. Default: _Control+Next_ and _Control+Prior_
+	(i.e. Control+PageDown and Control+PageUp).
+
+*tab-goto-1* .. *tab-goto-9*
+	Switches to the specified tab. Default: _none_.
 
 # SECTION: search-bindings
 

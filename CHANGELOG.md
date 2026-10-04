@@ -73,7 +73,18 @@
 
 ## Unreleased
 ### Added
+
+* Tabs. New key bindings: `tab-new` (default `Control+Shift+t`),
+  `tab-close` (default `Control+Shift+w`), `tab-next` (default
+  `Control+Next`), `tab-prev` (default `Control+Prior`), and
+  `tab-goto-1` .. `tab-goto-9`. A tab bar is shown when a window has
+  more than one tab.
+
+
 ### Changed
+
+* The `quit` key binding, and closing the window, now closes all tabs
+  in the window.
 
 * Cells with a non-default background colors, but otherwise empty, are
   now preserved (not removed) when resizing a terminal window

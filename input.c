@@ -34,6 +34,7 @@
 #include "search.h"
 #include "selection.h"
 #include "spawn.h"
+#include "tabs.h"
 #include "terminal.h"
 #include "tokenize.h"
 #include "unicode-mode.h"
@@ -454,7 +455,7 @@ execute_binding(struct seat *seat, struct terminal *term,
         return true;
 
     case BIND_ACTION_QUIT:
-        term_shutdown(term);
+        tab_close_all(term->window);
         return true;
 
     case BIND_ACTION_REGEX_LAUNCH:
@@ -503,6 +504,34 @@ execute_binding(struct seat *seat, struct terminal *term,
 
     case BIND_ACTION_THEME_TOGGLE:
         term_theme_toggle(term);
+        return true;
+
+    case BIND_ACTION_TAB_NEW:
+        tab_new(term);
+        return true;
+
+    case BIND_ACTION_TAB_CLOSE:
+        term_shutdown(term);
+        return true;
+
+    case BIND_ACTION_TAB_NEXT:
+        tab_cycle(term->window, 1);
+        return true;
+
+    case BIND_ACTION_TAB_PREV:
+        tab_cycle(term->window, -1);
+        return true;
+
+    case BIND_ACTION_TAB_GOTO_1:
+    case BIND_ACTION_TAB_GOTO_2:
+    case BIND_ACTION_TAB_GOTO_3:
+    case BIND_ACTION_TAB_GOTO_4:
+    case BIND_ACTION_TAB_GOTO_5:
+    case BIND_ACTION_TAB_GOTO_6:
+    case BIND_ACTION_TAB_GOTO_7:
+    case BIND_ACTION_TAB_GOTO_8:
+    case BIND_ACTION_TAB_GOTO_9:
+        tab_activate_index(term->window, action - BIND_ACTION_TAB_GOTO_1);
         return true;
 
     case BIND_ACTION_SELECT_BEGIN:
@@ -2513,6 +2542,7 @@ wl_pointer_enter(void *data, struct wl_pointer *wl_pointer,
     case TERM_SURF_BORDER_RIGHT:
     case TERM_SURF_BORDER_TOP:
     case TERM_SURF_BORDER_BOTTOM:
+    case TERM_SURF_TAB_BAR:
         break;
 
     case TERM_SURF_BUTTON_MINIMIZE:
@@ -2612,6 +2642,7 @@ wl_pointer_leave(void *data, struct wl_pointer *wl_pointer,
         case TERM_SURF_BORDER_RIGHT:
         case TERM_SURF_BORDER_TOP:
         case TERM_SURF_BORDER_BOTTOM:
+        case TERM_SURF_TAB_BAR:
             break;
         }
 
@@ -2696,6 +2727,7 @@ wl_pointer_motion(void *data, struct wl_pointer *wl_pointer,
     case TERM_SURF_BORDER_RIGHT:
     case TERM_SURF_BORDER_TOP:
     case TERM_SURF_BORDER_BOTTOM:
+    case TERM_SURF_TAB_BAR:
         break;
     }
 
@@ -2746,6 +2778,7 @@ wl_pointer_motion(void *data, struct wl_pointer *wl_pointer,
     case TERM_SURF_BORDER_RIGHT:
     case TERM_SURF_BORDER_TOP:
     case TERM_SURF_BORDER_BOTTOM:
+    case TERM_SURF_TAB_BAR:
         break;
 
     case TERM_SURF_GRID: {
@@ -3242,7 +3275,15 @@ wl_pointer_button(void *data, struct wl_pointer *wl_pointer,
             pointer_is_on_button(term, seat, CSD_SURF_CLOSE) &&
             state == WL_POINTER_BUTTON_STATE_RELEASED)
         {
-            term_shutdown(term);
+            tab_close_all(term->window);
+        }
+        break;
+
+    case TERM_SURF_TAB_BAR:
+        if (button == BTN_LEFT && state == WL_POINTER_BUTTON_STATE_PRESSED) {
+            const int idx = tab_bar_tab_at(term->window, seat->mouse.x);
+            if (idx >= 0)
+                tab_activate_index(term->window, idx);
         }
         break;
 

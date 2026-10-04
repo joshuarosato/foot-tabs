@@ -2767,7 +2767,8 @@ enter(void *data, struct wl_data_device *wl_data_device, uint32_t serial,
     /* Remember _which_ terminal the current DnD offer is targeting */
     xassert(seat->clipboard.window == NULL);
     tll_foreach(wayl->terms, it) {
-        if (term_surface_kind(it->item, surface) == TERM_SURF_GRID &&
+        if (it->item->window->term == it->item &&
+            term_surface_kind(it->item, surface) == TERM_SURF_GRID &&
             !it->item->is_sending_paste_data)
         {
             wl_data_offer_accept(

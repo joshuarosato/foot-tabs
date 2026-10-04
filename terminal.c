@@ -41,6 +41,7 @@
 #include "sixel.h"
 #include "slave.h"
 #include "spawn.h"
+#include "tabs.h"
 #include "url-mode.h"
 #include "util.h"
 #include "vt.h"
@@ -427,6 +428,10 @@ fdm_flash(struct fdm *fdm, int fd, int events, void *data)
             (unsigned long long)expiration_count);
 
     term->flash.active = false;
+
+    if (term->window->term != term)
+        return true;
+
     render_overlay(term);
 
     // since the overlay surface is synced with the main window surface, we have
@@ -1173,6 +1178,7 @@ term_init(const struct config *conf, struct fdm *fdm, struct reaper *reaper,
           struct wayland *wayl, const char *foot_exe, const char *cwd,
           const char *token, const char *pty_path,
           int argc, char *const *argv, const char *const *envp,
+          struct wl_window *tab_window,
           void (*shutdown_cb)(void *data, int exit_code), void *shutdown_data)
 {
     int ptmx = -1;
@@ -1371,6 +1377,7 @@ term_init(const struct config *conf, struct fdm *fdm, struct reaper *reaper,
                 .url = shm_chain_new(wayl, false, 1, desired_bit_depth, NULL, NULL),
                 .csd = shm_chain_new(wayl, false, 1, desired_bit_depth, NULL, NULL),
                 .overlay = shm_chain_new(wayl, false, 1, desired_bit_depth, NULL, NULL),
+                .tab_bar = shm_chain_new(wayl, false, 1, desired_bit_depth, NULL, NULL),
             },
             .scrollback_lines = conf->scrollback.lines,
             .app_sync_updates.timer_fd = app_sync_updates_fd,
@@ -1447,14 +1454,21 @@ term_init(const struct config *conf, struct fdm *fdm, struct reaper *reaper,
         reaper_add(term->reaper, term->slave, &fdm_client_terminated, term);
     }
 
-    /* Guess scale; we're not mapped yet, so we don't know on which
-     * output we'll be. Use scaling factor from first monitor */
-    xassert(tll_length(term->wl->monitors) > 0);
-    term->scale = tll_front(term->wl->monitors).scale;
+    if (tab_window != NULL) {
+        /* New tab in an existing window; inherit the window's scale */
+        term->scale = tab_window->term->scale;
+        term->window = tab_window;
+        tll_push_back(tab_window->tabs, term);
+    } else {
+        /* Guess scale; we're not mapped yet, so we don't know on which
+         * output we'll be. Use scaling factor from first monitor */
+        xassert(tll_length(term->wl->monitors) > 0);
+        term->scale = tll_front(term->wl->monitors).scale;
 
-    /* Initialize the Wayland window backend */
-    if ((term->window = wayl_win_init(term, token)) == NULL)
-        goto err;
+        /* Initialize the Wayland window backend */
+        if ((term->window = wayl_win_init(term, token)) == NULL)
+            goto err;
+    }
 
     /* Load fonts */
     if (!term_font_dpi_changed(term, 0.))
@@ -1467,7 +1481,7 @@ term_init(const struct config *conf, struct fdm *fdm, struct reaper *reaper,
     /* Let the Wayland backend know we exist */
     tll_push_back(wayl->terms, term);
 
-    switch (conf->startup_mode) {
+    switch (tab_window != NULL ? STARTUP_WINDOWED : conf->startup_mode) {
     case STARTUP_WINDOWED:
         break;
 
@@ -1632,7 +1646,8 @@ fdm_shutdown(struct fdm *fdm, int fd, int events, void *data)
     /* Kill the event FD */
     fdm_del(term->fdm, fd);
 
-    wayl_win_destroy(term->window);
+    if (tab_detach(term))
+        wayl_win_destroy(term->window);
     term->window = NULL;
 
     struct wayland *wayl = term->wl;
@@ -1840,7 +1855,8 @@ term_destroy(struct terminal *term)
         fdm_del(term->fdm, term->shutdown.terminate_timeout_fd);
 
     if (term->window != NULL) {
-        wayl_win_destroy(term->window);
+        if (tab_detach(term))
+            wayl_win_destroy(term->window);
         term->window = NULL;
     }
 
@@ -1917,6 +1933,7 @@ term_destroy(struct terminal *term)
     shm_chain_free(term->render.chains.url);
     shm_chain_free(term->render.chains.csd);
     shm_chain_free(term->render.chains.overlay);
+    shm_chain_free(term->render.chains.tab_bar);
     pixman_region32_fini(&term->render.last_overlay_clip);
 
     tll_free(term->tab_stops);
@@ -3644,6 +3661,7 @@ term_xcursor_update_for_seat(struct terminal *term, struct seat *seat)
     case TERM_SURF_BUTTON_MINIMIZE:
     case TERM_SURF_BUTTON_MAXIMIZE:
     case TERM_SURF_BUTTON_CLOSE:
+    case TERM_SURF_TAB_BAR:
         shape = CURSOR_SHAPE_LEFT_PTR;
         break;
 
@@ -4469,6 +4487,8 @@ term_surface_kind(const struct terminal *term, const struct wl_surface *surface)
         return TERM_SURF_BUTTON_MAXIMIZE;
     else if (surface == term->window->csd.surface[CSD_SURF_CLOSE].surface.surf)
         return TERM_SURF_BUTTON_CLOSE;
+    else if (surface == term->window->tab_bar.surface.surface.surf)
+        return TERM_SURF_TAB_BAR;
     else
         return TERM_SURF_NONE;
 }

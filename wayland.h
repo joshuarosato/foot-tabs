@@ -368,7 +368,8 @@ struct xdg_activation_token_context {
 
 struct wayland;
 struct wl_window {
-    struct terminal *term;
+    struct terminal *term;  /* The active tab */
+    tll(struct terminal *) tabs;
     struct wayl_surface surface;
     struct xdg_surface *xdg_surface;
     struct xdg_toplevel *xdg_toplevel;
@@ -396,6 +397,13 @@ struct wl_window {
         bool maximize:1;
         bool minimize:1;
     } wm_capabilities;
+
+    struct {
+        struct wayl_sub_surface surface;
+        struct fcft_font *font;
+        float font_scale;
+        bool dirty;
+    } tab_bar;
 
     struct wayl_sub_surface search;
     struct wayl_sub_surface scrollback_indicator;
@@ -545,6 +553,11 @@ void wayl_surface_scale_explicit_width_height(
 
 struct wl_window *wayl_win_init(struct terminal *term, const char *token);
 void wayl_win_destroy(struct wl_window *win);
+
+void wayl_win_tab_sync_size(
+    struct terminal *term, float logical_width, float logical_height,
+    bool force);
+void wayl_win_tab_bar_reload_font(struct wl_window *win);
 
 void wayl_win_scale(struct wl_window *win, const struct buffer *buf);
 void wayl_win_alpha_changed(struct wl_window *win);

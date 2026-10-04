@@ -42,6 +42,7 @@
 #include "shm.h"
 #include "sixel.h"
 #include "srgb.h"
+#include "tabs.h"
 #include "url-mode.h"
 #include "util.h"
 #include "xmalloc.h"
@@ -2406,25 +2407,15 @@ render_csd_part(struct terminal *term,
         &(pixman_rectangle16_t){0, 0, buf->width, buf->height});
 }
 
+/*
+ * Draws a single line of text, vertically centered in a line of the
+ * specified height. Clipping is up to the caller.
+ */
 static void
-render_osd(struct terminal *term, const struct wayl_sub_surface *sub_surf,
-           struct fcft_font *font, struct buffer *buf,
-           const char32_t *text, uint32_t _fg, uint32_t _bg,
-           unsigned x)
+render_text_line(struct terminal *term, pixman_image_t *pix,
+                 struct fcft_font *font, const char32_t *text,
+                 const pixman_color_t *fg, int x, int line_y, int line_height)
 {
-    pixman_region32_t clip;
-    pixman_region32_init_rect(&clip, 0, 0, buf->width, buf->height);
-    pixman_image_set_clip_region32(buf->pix[0], &clip);
-    pixman_region32_fini(&clip);
-
-    const bool gamma_correct = wayl_do_linear_blending(term->wl, term->conf);
-    uint16_t alpha = _bg >> 24 | (_bg >> 24 << 8);
-    pixman_color_t bg = color_hex_to_pixman_with_alpha(_bg, alpha, gamma_correct);
-    pixman_image_fill_rectangles(
-        PIXMAN_OP_SRC, buf->pix[0], &bg, 1,
-        &(pixman_rectangle16_t){0, 0, buf->width, buf->height});
-
-    pixman_color_t fg = color_hex_to_pixman(_fg, gamma_correct);
     const int x_ofs = term->font_x_ofs;
 
     const size_t len = c32len(text);
@@ -2457,15 +2448,14 @@ render_osd(struct terminal *term, const struct wayl_sub_surface *sub_surf,
         glyphs = _glyphs;
     }
 
-    pixman_image_t *src = pixman_image_create_solid_fill(&fg);
+    pixman_image_t *src = pixman_image_create_solid_fill(fg);
 
     /* Calculate baseline  */
-    unsigned y;
+    int y;
     {
-        const int line_height = buf->height;
         const int font_height = max(font->height, font->ascent + font->descent);
         const int glyph_top_y = round((line_height - font_height) / 2.);
-        y = term->font_y_ofs + glyph_top_y + font->ascent;
+        y = line_y + term->font_y_ofs + glyph_top_y + font->ascent;
     }
 
     for (size_t i = 0; i < glyph_count; i++) {
@@ -2473,12 +2463,12 @@ render_osd(struct terminal *term, const struct wayl_sub_surface *sub_surf,
 
         if (unlikely(glyph->is_color_glyph)) {
             pixman_image_composite32(
-                PIXMAN_OP_OVER, glyph->pix, NULL, buf->pix[0], 0, 0, 0, 0,
+                PIXMAN_OP_OVER, glyph->pix, NULL, pix, 0, 0, 0, 0,
                 x + x_ofs + glyph->x, y - glyph->y,
                 glyph->width, glyph->height);
         } else {
             pixman_image_composite32(
-                PIXMAN_OP_OVER, src, glyph->pix, buf->pix[0], 0, 0, 0, 0,
+                PIXMAN_OP_OVER, src, glyph->pix, pix, 0, 0, 0, 0,
                 x + x_ofs + glyph->x, y - glyph->y,
                 glyph->width, glyph->height);
         }
@@ -2488,6 +2478,28 @@ render_osd(struct terminal *term, const struct wayl_sub_surface *sub_surf,
 
     fcft_text_run_destroy(text_run);
     pixman_image_unref(src);
+}
+
+static void
+render_osd(struct terminal *term, const struct wayl_sub_surface *sub_surf,
+           struct fcft_font *font, struct buffer *buf,
+           const char32_t *text, uint32_t _fg, uint32_t _bg,
+           unsigned x)
+{
+    pixman_region32_t clip;
+    pixman_region32_init_rect(&clip, 0, 0, buf->width, buf->height);
+    pixman_image_set_clip_region32(buf->pix[0], &clip);
+    pixman_region32_fini(&clip);
+
+    const bool gamma_correct = wayl_do_linear_blending(term->wl, term->conf);
+    uint16_t alpha = _bg >> 24 | (_bg >> 24 << 8);
+    pixman_color_t bg = color_hex_to_pixman_with_alpha(_bg, alpha, gamma_correct);
+    pixman_image_fill_rectangles(
+        PIXMAN_OP_SRC, buf->pix[0], &bg, 1,
+        &(pixman_rectangle16_t){0, 0, buf->width, buf->height});
+
+    pixman_color_t fg = color_hex_to_pixman(_fg, gamma_correct);
+    render_text_line(term, buf->pix[0], font, text, &fg, x, 0, buf->height);
     pixman_image_set_clip_region32(buf->pix[0], NULL);
 
     quirk_weston_subsurface_desync_on(sub_surf->sub);
@@ -3142,6 +3154,123 @@ render_scrollback_position(struct terminal *term)
 }
 
 static void
+render_tab_bar(struct terminal *term)
+{
+    struct wl_window *win = term->window;
+    struct wayl_sub_surface *surf = &win->tab_bar.surface;
+
+    if (!tab_bar_visible(win)) {
+        if (surf->surface.surf != NULL) {
+            wl_surface_attach(surf->surface.surf, NULL, 0, 0);
+            wl_surface_commit(surf->surface.surf);
+        }
+        return;
+    }
+
+    if (surf->surface.surf == NULL && !wayl_win_subsurface_new(win, surf, true)) {
+        LOG_ERR("failed to create tab bar surface");
+        return;
+    }
+
+    wayl_win_tab_bar_reload_font(win);
+    struct fcft_font *font = win->tab_bar.font;
+    if (font == NULL)
+        return;
+
+    const int width = term->width;
+    const int height = tab_bar_height(term);
+    if (width <= 0 || height <= 0)
+        return;
+
+    struct buffer *buf = shm_get_buffer(term->render.chains.tab_bar, width, height);
+    pixman_image_t *pix = buf->pix[0];
+
+    /* The active tab blends into the grid; inactive tabs are muted */
+    const bool gamma_correct = wayl_do_linear_blending(term->wl, term->conf);
+    const uint32_t _bg = term->colors.bg;
+    const uint32_t _fg = term->colors.fg;
+
+    const pixman_color_t active_bg = color_hex_to_pixman(_bg, gamma_correct);
+    const pixman_color_t active_fg = color_hex_to_pixman(_fg, gamma_correct);
+    const pixman_color_t inactive_bg = color_hex_to_pixman(
+        color_blend_towards(_bg, _fg, 0.12), gamma_correct);
+    const pixman_color_t inactive_fg = color_hex_to_pixman(
+        color_blend_towards(_fg, _bg, 0.4), gamma_correct);
+    const pixman_color_t separator = color_hex_to_pixman(
+        color_blend_towards(_bg, _fg, 0.3), gamma_correct);
+
+    pixman_image_fill_rectangles(
+        PIXMAN_OP_SRC, pix, &inactive_bg, 1,
+        &(pixman_rectangle16_t){0, 0, width, height});
+
+    const struct fcft_glyph *M = fcft_rasterize_char_utf32(
+        font, U'M', term->font_subpixel);
+    const int margin = M != NULL ? M->advance.x : font->max_advance.x;
+    const int sep_width = max(1, (int)roundf(term->scale));
+    const int sep_inset = height / 4;
+
+    size_t idx = 0;
+    const struct terminal *prev = NULL;
+
+    tll_foreach(win->tabs, it) {
+        const struct terminal *tab = it->item;
+        const bool active = tab == term;
+
+        int x0, x1;
+        tab_bar_tab_extent(win, width, idx, &x0, &x1);
+
+        if (active) {
+            pixman_image_fill_rectangles(
+                PIXMAN_OP_SRC, pix, &active_bg, 1,
+                &(pixman_rectangle16_t){x0, 0, x1 - x0, height});
+        } else if (prev != NULL && prev != term) {
+            pixman_image_fill_rectangles(
+                PIXMAN_OP_SRC, pix, &separator, 1,
+                &(pixman_rectangle16_t){
+                    x0, sep_inset, sep_width, height - 2 * sep_inset});
+        }
+
+        char *title = xasprintf(
+            "%zu: %s", idx + 1,
+            tab->window_title != NULL ? tab->window_title : "foot");
+        char32_t *text = ambstoc32(title);
+        free(title);
+
+        if (text != NULL) {
+            pixman_region32_t clip;
+            pixman_region32_init_rect(
+                &clip, x0, 0, max(0, x1 - x0 - margin / 2), height);
+            pixman_image_set_clip_region32(pix, &clip);
+            pixman_region32_fini(&clip);
+
+            render_text_line(
+                term, pix, font, text, active ? &active_fg : &inactive_fg,
+                x0 + margin, 0, height);
+
+            pixman_image_set_clip_region32(pix, NULL);
+            free(text);
+        }
+
+        prev = tab;
+        idx++;
+    }
+
+    wl_subsurface_set_position(surf->sub, 0, 0);
+    wayl_surface_scale(win, &surf->surface, buf, term->scale);
+    wl_surface_attach(surf->surface.surf, buf->wl_buf, 0, 0);
+    wl_surface_damage_buffer(surf->surface.surf, 0, 0, buf->width, buf->height);
+
+    struct wl_region *region = wl_compositor_create_region(term->wl->compositor);
+    if (region != NULL) {
+        wl_region_add(region, 0, 0, buf->width, buf->height);
+        wl_surface_set_opaque_region(surf->surface.surf, region);
+        wl_region_destroy(region);
+    }
+
+    wl_surface_commit(surf->surface.surf);
+}
+
+static void
 render_render_timer(struct terminal *term, struct timespec render_time)
 {
     struct wl_window *win = term->window;
@@ -3615,6 +3744,11 @@ grid_render(struct terminal *term)
     render_ime_preedit(term, buf);
     render_scrollback_position(term);
 
+    if (term->window->tab_bar.dirty) {
+        term->window->tab_bar.dirty = false;
+        render_tab_bar(term);
+    }
+
     if (term->conf->tweak.render_timer != RENDER_TIMER_NONE) {
         struct timespec end_time;
         clock_gettime(CLOCK_MONOTONIC, &end_time);
@@ -3677,7 +3811,7 @@ grid_render(struct terminal *term)
 
     xassert(term->window->frame_callback == NULL);
     term->window->frame_callback = wl_surface_frame(term->window->surface.surf);
-    wl_callback_add_listener(term->window->frame_callback, &frame_listener, term);
+    wl_callback_add_listener(term->window->frame_callback, &frame_listener, term->window);
 
     wayl_win_scale(term->window, buf);
 
@@ -4305,14 +4439,16 @@ render_update_title(struct terminal *term)
         title = copy;
     }
 
-    xdg_toplevel_set_title(term->window->xdg_toplevel, title);
+    if (term->window->term == term)
+        xdg_toplevel_set_title(term->window->xdg_toplevel, title);
     free(copy);
 }
 
 static void
 frame_callback(void *data, struct wl_callback *wl_callback, uint32_t callback_data)
 {
-    struct terminal *term = data;
+    struct wl_window *win = data;
+    struct terminal *term = win->term;
 
     xassert(term->window->frame_callback == wl_callback);
     wl_callback_destroy(wl_callback);
@@ -4521,6 +4657,7 @@ set_size_from_grid(struct terminal *term, int *width, int *height, int cols, int
     /* Include any configured padding */
     new_width  += (term->conf->pad_left + term->conf->pad_right) * term->scale;
     new_height += (term->conf->pad_top + term->conf->pad_bottom) * term->scale;
+    new_height += tab_bar_height(term);
 
     /* Round to multiples of scale */
     new_width = round(term->scale * round(new_width / term->scale));
@@ -4622,15 +4759,18 @@ render_resize(struct terminal *term, int width, int height, uint8_t opts)
     const int min_width = roundf(scale * ceilf((min_cols * term->cell_width) / scale));
     const int min_height = roundf(scale * ceilf((min_rows * term->cell_height) / scale));
 
+    /* The tab bar (if visible) sits on top of the grid's top margin */
+    const int tab_bar = tab_bar_height(term);
+
     width = max(width, min_width);
-    height = max(height, min_height);
+    height = max(height, min_height + tab_bar);
 
     /* Padding */
     const int max_pad_x = (width - min_width) / 2;
-    const int max_pad_y = (height - min_height) / 2;
+    const int max_pad_y = (height - tab_bar - min_height) / 2;
     const int pad_left  = min(max_pad_x, scale * term->conf->pad_left);
     const int pad_right = min(max_pad_x, scale * term->conf->pad_right);
-    const int pad_top   = min(max_pad_y, scale * term->conf->pad_top);
+    const int pad_top   = tab_bar + min(max_pad_y, scale * term->conf->pad_top);
     const int pad_bottom= min(max_pad_y, scale * term->conf->pad_bottom);
 
     if (is_floating &&
@@ -4644,7 +4784,7 @@ render_resize(struct terminal *term, int width, int height, uint8_t opts)
 
         height = ((height - (pad_top + pad_bottom)) / term->cell_height)
                  * term->cell_height + (pad_top + pad_bottom);
-        height = max(min_height, roundf(scale * roundf(height / scale)));
+        height = max(min_height + tab_bar, roundf(scale * roundf(height / scale)));
     }
 
     if (!(opts & RESIZE_FORCE) &&
@@ -4724,7 +4864,7 @@ render_resize(struct terminal *term, int width, int height, uint8_t opts)
 
     if (centered_padding && !term->window->is_resizing) {
         term->margins.left = total_x_pad / 2;
-        term->margins.top = total_y_pad / 2;
+        term->margins.top = tab_bar + (total_y_pad - tab_bar) / 2;
     } else {
         term->margins.left = pad_left;
         term->margins.top = pad_top;
@@ -4977,7 +5117,7 @@ damage_view:
 
         const int toplevel_min_height = roundf(border / scale) +
                                         roundf(title / scale) +
-                                        roundf(min_height / scale) +
+                                        roundf((min_height + tab_bar) / scale) +
                                         roundf(border / scale);
 
         const int toplevel_width = roundf(border / scale) +
@@ -5011,6 +5151,9 @@ damage_view:
     render_refresh_csd(term);
     render_refresh_search(term);
     render_refresh(term);
+
+    if (term->window->term == term)
+        term->window->tab_bar.dirty = true;
 
     return true;
 }
@@ -5154,6 +5297,10 @@ fdm_hook_refresh_pending_terminals(struct fdm *fdm, void *data)
         if (unlikely(term->shutdown.in_progress || !term->window->is_configured))
             continue;
 
+        /* Background tabs are fully repainted when activated */
+        if (term->window->term != term)
+            continue;
+
         bool grid = term->render.refresh.grid;
         bool csd = term->render.refresh.csd;
         bool search = term->is_searching && term->render.refresh.search;
@@ -5238,6 +5385,7 @@ render_refresh_title(struct terminal *term)
     }
 
     render_refresh_csd(term);
+    render_refresh_tab_bar(term->window);
 }
 
 void
@@ -5262,7 +5410,8 @@ render_refresh_app_id(struct terminal *term)
     const char *app_id =
         term->app_id != NULL ? term->app_id : term->conf->app_id;
 
-    xdg_toplevel_set_app_id(term->window->xdg_toplevel, app_id);
+    if (term->window->term == term)
+        xdg_toplevel_set_app_id(term->window->xdg_toplevel, app_id);
     term->render.app_id.last_update = now;
 }
 
@@ -5291,6 +5440,9 @@ render_refresh_icon(struct terminal *term)
         return;
     }
 
+    if (term->window->term != term)
+        return;
+
     const char *icon_name = term_icon(term);
     LOG_DBG("setting toplevel icon: %s", icon_name);
 
@@ -5308,6 +5460,36 @@ void
 render_refresh(struct terminal *term)
 {
     term->render.refresh.grid = true;
+}
+
+void
+render_refresh_tab_bar(struct wl_window *win)
+{
+    win->tab_bar.dirty = true;
+    render_refresh(win->term);
+}
+
+/*
+ * If an interactive resize has a delayed TIOCSWINSZ pending, send it
+ * now. Used before switching away from a tab, since the timer is
+ * owned by the window, but refers to the tab that set it.
+ */
+void
+render_flush_pending_resize(struct terminal *term)
+{
+    struct wl_window *win = term->window;
+
+    if (win->resize_timeout_fd < 0)
+        return;
+
+    fdm_del(term->fdm, win->resize_timeout_fd);
+    win->resize_timeout_fd = -1;
+
+    if (term->shutdown.in_progress)
+        return;
+
+    tiocswinsz(term);
+    delayed_reflow_of_normal_grid(term);
 }
 
 void

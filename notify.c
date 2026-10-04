@@ -14,6 +14,7 @@
 #include "log.h"
 #include "config.h"
 #include "spawn.h"
+#include "tabs.h"
 #include "terminal.h"
 #include "util.h"
 #include "wayland.h"
@@ -268,6 +269,9 @@ notif_done(struct reaper *reaper, pid_t pid, int status, void *data)
                 notif->id != NULL ? notif->id : "<unset>");
 
         if (notif->activated && notif->focus) {
+            if (!term->shutdown.in_progress)
+                tab_activate(term);
+
             if (notif->xdg_token == NULL) {
                 /* No token so request our own and let the compositor decide focus vs. urgency */
                 LOG_DBG("set window urgency on notification activation (no XDG token available)");
