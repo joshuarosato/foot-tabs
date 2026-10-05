@@ -630,6 +630,7 @@ bool
 tab_detach(struct terminal *term)
 {
     struct wl_window *win = term->window;
+    const bool tab_bar_was_visible = tab_bar_visible(win);
 
     size_t idx = 0;
     bool found = false;
@@ -661,7 +662,7 @@ tab_detach(struct terminal *term)
             /* Like most tabbed applications, prefer the tab to the right */
             tab_activate_index(win, min(idx, tll_length(win->tabs) - 1));
         }
-    } else if (!tab_bar_visible(win)) {
+    } else if (tab_bar_was_visible && !tab_bar_visible(win)) {
         /* The tab bar was hidden; give its space to the grid */
         const struct terminal *active = win->term;
         wayl_win_tab_sync_size(
@@ -695,7 +696,14 @@ tab_detach(struct terminal *term)
 bool
 tab_bar_visible(const struct wl_window *win)
 {
-    return tll_length(win->tabs) > 1;
+    switch (win->term->conf->tabs.show_bar) {
+    case TABS_SHOW_BAR_AUTO:   return tll_length(win->tabs) > 1;
+    case TABS_SHOW_BAR_ALWAYS: return true;
+    case TABS_SHOW_BAR_NEVER:  return false;
+    }
+
+    BUG("unhandled show-bar value: %d", win->term->conf->tabs.show_bar);
+    return false;
 }
 
 bool

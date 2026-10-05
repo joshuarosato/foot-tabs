@@ -486,6 +486,12 @@ struct config {
         } new_position;
 
         enum {
+            TABS_SHOW_BAR_AUTO,
+            TABS_SHOW_BAR_ALWAYS,
+            TABS_SHOW_BAR_NEVER,
+        } show_bar;
+
+        enum {
             TABS_ACTIVATE_ON_CLOSE_RIGHT,
             TABS_ACTIVATE_ON_CLOSE_LAST_USED,
         } activate_on_close;

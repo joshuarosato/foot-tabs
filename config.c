@@ -3096,6 +3096,16 @@ parse_section_tabs(struct context *ctx)
             (int *)&conf->tabs.new_position);
     }
 
+    else if (streq(key, "show-bar")) {
+        _Static_assert(sizeof(conf->tabs.show_bar) == sizeof(int),
+            "enum is not 32-bit");
+
+        return value_to_enum(
+            ctx,
+            (const char *[]){"auto", "always", "never", NULL},
+            (int *)&conf->tabs.show_bar);
+    }
+
     else if (streq(key, "activate-on-close")) {
         _Static_assert(sizeof(conf->tabs.activate_on_close) == sizeof(int),
             "enum is not 32-bit");
@@ -3787,6 +3797,7 @@ config_load(struct config *conf, const char *conf_path,
 
         .tabs = {
             .new_position = TABS_NEW_POSITION_AFTER_CURRENT,
+            .show_bar = TABS_SHOW_BAR_AUTO,
             .activate_on_close = TABS_ACTIVATE_ON_CLOSE_RIGHT,
             .shared_font_size = true,
             .confirm_close = true,

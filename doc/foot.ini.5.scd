@@ -1326,6 +1326,16 @@ bindings for opening, closing and switching tabs.
 The tab bar uses the *font* and *size* options from the *csd*
 section.
 
+*show-bar*
+	When to show the tab bar. One of:
+	
+	- *auto*: when the window has more than one tab.
+	- *always*: even when the window only has one tab.
+	- *never*: never; use the *tab-\** key bindings to switch
+	  tabs. The tab bar is still shown while renaming a tab.
+	
+	Default: _auto_.
+
 *new-tab-position*
 	Where new tabs are opened. One of:
 	

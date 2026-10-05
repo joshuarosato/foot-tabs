@@ -895,6 +895,13 @@ test_section_tabs(void)
         (int *)&conf.tabs.new_position);
 
     test_enum(
+        &ctx, &parse_section_tabs, "show-bar",
+        3,
+        (const char *[]){"auto", "always", "never"},
+        (int []){TABS_SHOW_BAR_AUTO, TABS_SHOW_BAR_ALWAYS, TABS_SHOW_BAR_NEVER},
+        (int *)&conf.tabs.show_bar);
+
+    test_enum(
         &ctx, &parse_section_tabs, "activate-on-close",
         2,
         (const char *[]){"right", "last-used"},

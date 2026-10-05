@@ -99,6 +99,8 @@
 * `transparency-toggle` key binding (unbound by default), toggling
   background transparency on and off, for all tabs in the window.
 * `[tabs]` section, with the options:
+  - `show-bar`: show the tab bar when the window has more than one
+    tab (`auto`, the default), `always`, or `never`.
   - `confirm-close`: when enabled (the default), closing a window with
     more than one tab asks for confirmation. Previously named
     `[main].confirm-close-tabs` (deprecated, but still accepted).

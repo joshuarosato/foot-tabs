@@ -82,8 +82,9 @@ void tab_rename_input(
 bool tab_detach(struct terminal *term);
 
 /*
- * The tab bar is visible (and takes up space) when there's more than
- * one tab. It is also *shown* while renaming the only tab, but then
+ * The tab bar is visible (and takes up space) depending on the
+ * show-bar option; by default, when there's more than one tab. It is
+ * also *shown* while renaming a tab when it isn't visible, but then
  * on top of the grid, to avoid resizing it.
  */
 bool tab_bar_visible(const struct wl_window *win);
