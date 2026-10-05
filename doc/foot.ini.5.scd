@@ -1324,7 +1324,9 @@ This section controls the behavior of tabs. See the *tab-\** key
 bindings for opening, closing and switching tabs.
 
 The tab bar uses the *font* and *size* options from the *csd*
-section.
+section. When a background tab rings the bell, or sends a desktop
+notification, its label is marked with a *•*, in red (color 1 of the
+palette), until the tab is activated.
 
 *show-bar*
 	When to show the tab bar. One of:

@@ -3305,6 +3305,10 @@ render_tab_bar(struct terminal *term)
     const pixman_color_t separator = color_hex_to_pixman(
         color_mix(_bg, _fg, 0.3), gamma_correct);
 
+    /* Background tabs that rang the bell; red, like the urgency margins */
+    const pixman_color_t attention_fg = color_hex_to_pixman(
+        term->colors.table[1], gamma_correct);
+
     pixman_image_fill_rectangles(
         PIXMAN_OP_SRC, pix, &inactive_bg, 1,
         &(pixman_rectangle16_t){0, 0, width, height});
@@ -3345,7 +3349,9 @@ render_tab_bar(struct terminal *term)
             label = c32dup(tab->tab.rename.buf != NULL
                            ? tab->tab.rename.buf : U"");
         } else {
-            char *title = xasprintf("%zu: %s", idx + 1, tab_title(tab));
+            char *title = xasprintf(
+                "%s%zu: %s", tab->tab.attention ? "\u2022 " : "",
+                idx + 1, tab_title(tab));
             label = ambstoc32(title);
             free(title);
         }
@@ -3363,7 +3369,9 @@ render_tab_bar(struct terminal *term)
             pixman_region32_fini(&clip);
 
             render_text_line(
-                term, pix, font, text, active ? &active_fg : &inactive_fg,
+                term, pix, font, text,
+                active ? &active_fg :
+                tab->tab.attention ? &attention_fg : &inactive_fg,
                 x0 + margin, 0, height);
 
             pixman_image_set_clip_region32(pix, NULL);

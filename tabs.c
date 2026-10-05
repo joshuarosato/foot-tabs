@@ -147,6 +147,7 @@ tab_activate(struct terminal *new)
     LOG_DBG("activating tab %p (previous: %p)", (void *)new, (void *)old);
 
     new->tab.activated = ++win->tab_activations;
+    new->tab.attention = false;
 
     /* The window's size, which the new tab will be resized to */
     const float logical_width = old->scale > 0. ? old->width / old->scale : 0.;
@@ -245,6 +246,19 @@ tab_activate_last_used(struct wl_window *win)
     struct terminal *tab = last_used_tab(win);
     if (tab != NULL)
         tab_activate(tab);
+}
+
+void
+tab_mark_attention(struct terminal *term)
+{
+    struct wl_window *win = term->window;
+
+    /* The active tab is already being looked at */
+    if (win == NULL || win->term == term || term->tab.attention)
+        return;
+
+    term->tab.attention = true;
+    render_refresh_tab_bar(win);
 }
 
 void

@@ -575,6 +575,9 @@ struct terminal {
         /* When the tab was last activated (wl_window.tab_activations) */
         uint64_t activated;
 
+        /* Rang the bell, or sent a notification, while in the background */
+        bool attention;
+
         /* Interactive renaming, edited in-place in the tab bar */
         struct {
             bool active;

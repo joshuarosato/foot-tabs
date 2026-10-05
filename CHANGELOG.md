@@ -87,7 +87,8 @@
   window has more than one tab; click to switch tab, drag to move it,
   double-click to rename, middle-click to close, and scroll to cycle
   tabs. A window
-  can have at most 9 tabs.
+  can have at most 9 tabs. Background tabs that ring the bell, or send
+  a desktop notification, are marked in the tab bar.
 * Scrollbar: `scrollback.scrollbar=never|auto|always` (default
   `never`), and `scrollback.scrollbar-width`. Drag or click the
   scrollbar to scroll.

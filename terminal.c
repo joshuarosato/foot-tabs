@@ -3839,6 +3839,8 @@ term_bell(struct terminal *term)
     if (!term->bell_action_enabled)
         return;
 
+    tab_mark_attention(term);
+
     if (term->conf->bell.urgent && !term->kbd_focus) {
         if (!wayl_win_set_urgent(term->window)) {
             /*

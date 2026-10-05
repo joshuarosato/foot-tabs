@@ -357,6 +357,9 @@ notify_notify(struct terminal *term, struct notification *notif)
     notif->stdout_fd = -1;
     notif->icon_fd = -1;
 
+    /* Even if the notification itself is inhibited, or not configured */
+    tab_mark_attention(term);
+
     if (term->conf->desktop_notifications.command.argv.args == NULL)
         return false;
 

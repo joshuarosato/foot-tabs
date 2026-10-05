@@ -37,6 +37,12 @@ void tab_cycle(struct wl_window *win, int direction);
 /* Switches to the previously active tab */
 void tab_activate_last_used(struct wl_window *win);
 
+/*
+ * Marks a background tab in the tab bar, until it is activated.
+ * Called on bell, and on desktop notifications.
+ */
+void tab_mark_attention(struct terminal *term);
+
 void tab_move(struct wl_window *win, int direction);
 void tab_move_to(struct wl_window *win, size_t idx);
 void tab_move_last(struct wl_window *win);
