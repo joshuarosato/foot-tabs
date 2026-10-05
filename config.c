@@ -193,6 +193,14 @@ static const char *const binding_action_map[] = {
     [BIND_ACTION_TAB_MOVE_LEFT] = "tab-move-left",
     [BIND_ACTION_TAB_MOVE_RIGHT] = "tab-move-right",
     [BIND_ACTION_TAB_RENAME] = "tab-rename",
+    [BIND_ACTION_TAB_FIRST] = "tab-first",
+    [BIND_ACTION_TAB_LAST] = "tab-last",
+    [BIND_ACTION_TAB_LAST_USED] = "tab-last-used",
+    [BIND_ACTION_TAB_MOVE_FIRST] = "tab-move-first",
+    [BIND_ACTION_TAB_MOVE_LAST] = "tab-move-last",
+    [BIND_ACTION_TAB_CLOSE_LEFT] = "tab-close-left",
+    [BIND_ACTION_TAB_CLOSE_RIGHT] = "tab-close-right",
+    [BIND_ACTION_TAB_CLOSE_OTHERS] = "tab-close-others",
     [BIND_ACTION_TRANSPARENCY_TOGGLE] = "transparency-toggle",
     [BIND_ACTION_TAB_GOTO_1] = "tab-goto-1",
     [BIND_ACTION_TAB_GOTO_2] = "tab-goto-2",
@@ -3088,11 +3096,24 @@ parse_section_tabs(struct context *ctx)
             (int *)&conf->tabs.new_position);
     }
 
+    else if (streq(key, "activate-on-close")) {
+        _Static_assert(sizeof(conf->tabs.activate_on_close) == sizeof(int),
+            "enum is not 32-bit");
+
+        return value_to_enum(
+            ctx,
+            (const char *[]){"right", "last-used", NULL},
+            (int *)&conf->tabs.activate_on_close);
+    }
+
     else if (streq(key, "shared-font-size"))
         return value_to_bool(ctx, &conf->tabs.shared_font_size);
 
     else if (streq(key, "confirm-close"))
         return value_to_bool(ctx, &conf->tabs.confirm_close);
+
+    else if (streq(key, "confirm-close-multiple"))
+        return value_to_bool(ctx, &conf->tabs.confirm_close_multiple);
 
     else {
         LOG_CONTEXTUAL_ERR("not a valid option: %s", key);
@@ -3766,8 +3787,10 @@ config_load(struct config *conf, const char *conf_path,
 
         .tabs = {
             .new_position = TABS_NEW_POSITION_AFTER_CURRENT,
+            .activate_on_close = TABS_ACTIVATE_ON_CLOSE_RIGHT,
             .shared_font_size = true,
             .confirm_close = true,
+            .confirm_close_multiple = true,
         },
 
         .env_vars = tll_init(),

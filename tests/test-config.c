@@ -894,8 +894,16 @@ test_section_tabs(void)
         (int []){TABS_NEW_POSITION_AFTER_CURRENT, TABS_NEW_POSITION_LAST},
         (int *)&conf.tabs.new_position);
 
+    test_enum(
+        &ctx, &parse_section_tabs, "activate-on-close",
+        2,
+        (const char *[]){"right", "last-used"},
+        (int []){TABS_ACTIVATE_ON_CLOSE_RIGHT, TABS_ACTIVATE_ON_CLOSE_LAST_USED},
+        (int *)&conf.tabs.activate_on_close);
+
     test_boolean(&ctx, &parse_section_tabs, "shared-font-size", &conf.tabs.shared_font_size);
     test_boolean(&ctx, &parse_section_tabs, "confirm-close", &conf.tabs.confirm_close);
+    test_boolean(&ctx, &parse_section_tabs, "confirm-close-multiple", &conf.tabs.confirm_close_multiple);
 
     config_free(&conf);
 }

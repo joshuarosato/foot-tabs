@@ -1994,7 +1994,7 @@ render_overlay(struct terminal *term)
     const bool unicode_mode_active = term->unicode_mode.active;
 
     const enum overlay_style style =
-        term->window->confirm_close || term->paste_confirm.active
+        term->window->confirm_close != TAB_CLOSE_NONE || term->paste_confirm.active
             ? OVERLAY_CONFIRM :
         term->is_searching ? OVERLAY_SEARCH :
         term->flash.active ? OVERLAY_FLASH :
@@ -3421,16 +3421,37 @@ render_confirm_box(struct terminal *term, struct buffer *buf)
     /* Question (up to two lines), then the answers */
     char *msgs[2] = {NULL};
 
-    if (term->window->confirm_close) {
+    const struct wl_window *win = term->window;
+    const size_t close_count = tab_close_count(win, win->confirm_close);
+
+    switch (win->confirm_close) {
+    case TAB_CLOSE_ALL:
         msgs[0] = xasprintf(
             "You have %zu tabs open. Close the window?",
-            tll_length(term->window->tabs));
-    } else {
+            tll_length(win->tabs));
+        break;
+
+    case TAB_CLOSE_LEFT:
+        msgs[0] = xasprintf("Close %zu tabs to the left?", close_count);
+        break;
+
+    case TAB_CLOSE_RIGHT:
+        msgs[0] = xasprintf("Close %zu tabs to the right?", close_count);
+        break;
+
+    case TAB_CLOSE_OTHERS:
+        msgs[0] = xasprintf("Close %zu other tabs?", close_count);
+        break;
+
+    case TAB_CLOSE_NONE: {
+        /* Not closing tabs; confirming a paste */
         const size_t lines = term->paste_confirm.lines;
         msgs[0] = xasprintf(
             "Paste %zu line%s of text?", lines, lines == 1 ? "" : "s");
         if (!term->bracketed_paste)
             msgs[1] = xstrdup("Each line will run as a command when pasted.");
+        break;
+    }
     }
 
     const size_t msg_count = msgs[1] != NULL ? 2 : 1;

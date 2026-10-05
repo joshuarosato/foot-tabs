@@ -36,6 +36,7 @@
 #include "config.h"
 #include "cursor-shape.h"
 #include "fdm.h"
+#include "tabs.h"
 
 /* Forward declarations */
 struct terminal;
@@ -405,8 +406,15 @@ struct wl_window {
         bool dirty;
     } tab_bar;
 
-    /* Asking the user to confirm closing a window with multiple tabs */
-    bool confirm_close;
+    /*
+     * Asking the user to confirm closing multiple tabs; either the
+     * whole window, or the tabs to the left/right of, or other than,
+     * the active tab.
+     */
+    enum tab_close_scope confirm_close;
+
+    /* Incremented each time a tab is activated */
+    uint64_t tab_activations;
 
     /* Transparency disabled by the user (transparency-toggle) */
     bool force_opaque;

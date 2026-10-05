@@ -19,21 +19,45 @@ struct wl_window;
 /* Matches the tab-goto-N key bindings */
 #define TAB_MAX_COUNT 9
 
+/* Which tabs to close, relative to the active tab */
+enum tab_close_scope {
+    TAB_CLOSE_NONE,
+    TAB_CLOSE_ALL,     /* The window */
+    TAB_CLOSE_LEFT,
+    TAB_CLOSE_RIGHT,
+    TAB_CLOSE_OTHERS,
+};
+
 bool tab_new(struct terminal *term);
 void tab_activate(struct terminal *term);
 void tab_activate_index(struct wl_window *win, size_t idx);
+void tab_activate_last(struct wl_window *win);
 void tab_cycle(struct wl_window *win, int direction);
+
+/* Switches to the previously active tab */
+void tab_activate_last_used(struct wl_window *win);
+
 void tab_move(struct wl_window *win, int direction);
+void tab_move_to(struct wl_window *win, size_t idx);
+void tab_move_last(struct wl_window *win);
 void tab_drag(struct wl_window *win, int x);
-void tab_close_all(struct wl_window *win);
+void tab_close(struct wl_window *win, enum tab_close_scope scope);
 
 /*
- * Closes the window, i.e. all its tabs. If the window has more than
- * one tab, the user is first asked to confirm (unless disabled in the
- * configuration). Requesting a close while already asking, closes
- * the window.
+ * Closes the tabs in 'scope'. If that is more than one tab, the user
+ * is first asked to confirm (unless disabled in the configuration).
+ */
+void tab_request_close(struct wl_window *win, enum tab_close_scope scope);
+
+/*
+ * Closes the window, i.e. all its tabs, asking for confirmation like
+ * tab_request_close(). Requesting a close while already asking,
+ * closes the window.
  */
 void tab_request_close_window(struct wl_window *win);
+
+/* Number of tabs (not already closing) that 'scope' would close */
+size_t tab_close_count(const struct wl_window *win, enum tab_close_scope scope);
 void tab_confirm_close_input(struct terminal *term, xkb_keysym_t sym);
 struct terminal *tab_at_index(const struct wl_window *win, size_t idx);
 

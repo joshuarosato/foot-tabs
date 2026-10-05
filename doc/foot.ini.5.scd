@@ -1334,6 +1334,15 @@ section.
 	
 	Default: _after-current_.
 
+*activate-on-close*
+	Which tab to switch to when the current tab is closed. One of:
+	
+	- *right*: the tab to the right of the closed tab (or the tab to
+	  the left, if it was the last tab).
+	- *last-used*: the most recently used tab (see *tab-last-used*).
+	
+	Default: _right_.
+
 *shared-font-size*
 	Boolean. When enabled, changing the font size (with the
 	*font-increase*, *font-decrease* and *font-reset* key bindings)
@@ -1353,6 +1362,13 @@ section.
 	*main* section. The old name still works, but is deprecated.
 	
 	Default: _yes_.
+
+*confirm-close-multiple*
+	Boolean. When enabled, closing more than one tab with the
+	*tab-close-left*, *tab-close-right* or *tab-close-others* key
+	bindings first asks for confirmation. Answer with *y* or *Enter*
+	to close the tabs, or *n* or *Escape* to keep them open. Default:
+	_yes_.
 
 # SECTION: key-bindings
 
@@ -1637,9 +1653,26 @@ e.g. *search-start=none*.
 *tab-goto-1* .. *tab-goto-9*
 	Switches to the specified tab. Default: _Control+1_ .. _Control+9_.
 
+*tab-first*, *tab-last*
+	Switches to the first, or last, tab. Default: _none_.
+
+*tab-last-used*
+	Switches to the previously used tab. Using it repeatedly toggles
+	between the two most recently used tabs. Default: _none_.
+
 *tab-move-left*, *tab-move-right*
 	Moves the current tab one step to the left, or right, in the tab
 	bar. Default: _Control+Shift+Prior_ and _Control+Shift+Next_.
+
+*tab-move-first*, *tab-move-last*
+	Moves the current tab to the start, or end, of the tab
+	bar. Default: _none_.
+
+*tab-close-left*, *tab-close-right*, *tab-close-others*
+	Closes all tabs to the left of, to the right of, or other than,
+	the current tab. When closing more than one tab, the user is first
+	asked to confirm (see *confirm-close-multiple* in the *tabs*
+	section). Default: _none_.
 
 *tab-rename*
 	Renames the current tab. The name is edited in-place in the tab

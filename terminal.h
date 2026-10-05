@@ -572,6 +572,9 @@ struct terminal {
     struct {
         char *title;  /* User assigned; overrides window_title in the tab bar */
 
+        /* When the tab was last activated (wl_window.tab_activations) */
+        uint64_t activated;
+
         /* Interactive renaming, edited in-place in the tab bar */
         struct {
             bool active;

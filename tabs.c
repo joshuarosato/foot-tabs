@@ -146,6 +146,8 @@ tab_activate(struct terminal *new)
 
     LOG_DBG("activating tab %p (previous: %p)", (void *)new, (void *)old);
 
+    new->tab.activated = ++win->tab_activations;
+
     /* The window's size, which the new tab will be resized to */
     const float logical_width = old->scale > 0. ? old->width / old->scale : 0.;
     const float logical_height = old->scale > 0. ? old->height / old->scale : 0.;
@@ -212,6 +214,40 @@ tab_activate_index(struct wl_window *win, size_t idx)
 }
 
 void
+tab_activate_last(struct wl_window *win)
+{
+    tab_activate_index(win, tll_length(win->tabs) - 1);
+}
+
+/* The most recently active tab, other than the active one, that isn't
+ * being closed */
+static struct terminal *
+last_used_tab(const struct wl_window *win)
+{
+    struct terminal *last = NULL;
+
+    tll_foreach(win->tabs, it) {
+        struct terminal *tab = it->item;
+
+        if (tab == win->term || tab->shutdown.in_progress)
+            continue;
+
+        if (last == NULL || tab->tab.activated > last->tab.activated)
+            last = tab;
+    }
+
+    return last;
+}
+
+void
+tab_activate_last_used(struct wl_window *win)
+{
+    struct terminal *tab = last_used_tab(win);
+    if (tab != NULL)
+        tab_activate(tab);
+}
+
+void
 tab_move(struct wl_window *win, int direction)
 {
     tll_foreach(win->tabs, it) {
@@ -230,6 +266,32 @@ tab_move(struct wl_window *win, int direction)
     }
 }
 
+/* Moves the active tab to position 'idx' */
+void
+tab_move_to(struct wl_window *win, size_t idx)
+{
+    const size_t count = tll_length(win->tabs);
+    const size_t target = min(idx, count - 1);
+
+    size_t current = 0;
+    tll_foreach(win->tabs, it) {
+        if (it->item == win->term)
+            break;
+        current++;
+    }
+
+    for (; current < target; current++)
+        tab_move(win, 1);
+    for (; current > target; current--)
+        tab_move(win, -1);
+}
+
+void
+tab_move_last(struct wl_window *win)
+{
+    tab_move_to(win, tll_length(win->tabs) - 1);
+}
+
 /*
  * Moves the active tab to the tab bar position under 'x' (which may
  * be outside the tab bar, while dragging).
@@ -243,19 +305,7 @@ tab_drag(struct wl_window *win, int x)
     if (count < 2 || width <= 0)
         return;
 
-    const int target = max(0, min(count - 1, (int)((int64_t)x * count / width)));
-
-    int current = 0;
-    tll_foreach(win->tabs, it) {
-        if (it->item == win->term)
-            break;
-        current++;
-    }
-
-    for (; current < target; current++)
-        tab_move(win, 1);
-    for (; current > target; current--)
-        tab_move(win, -1);
+    tab_move_to(win, max(0, min(count - 1, (int)((int64_t)x * count / width))));
 }
 
 const char *
@@ -451,16 +501,78 @@ tab_cycle(struct wl_window *win, int direction)
     tab_activate_index(win, next);
 }
 
+static bool
+in_close_scope(enum tab_close_scope scope, bool is_active, bool after_active)
+{
+    switch (scope) {
+    case TAB_CLOSE_NONE:   return false;
+    case TAB_CLOSE_ALL:    return true;
+    case TAB_CLOSE_LEFT:   return !is_active && !after_active;
+    case TAB_CLOSE_RIGHT:  return after_active;
+    case TAB_CLOSE_OTHERS: return !is_active;
+    }
+
+    BUG("unhandled tab close scope: %d", scope);
+    return false;
+}
+
+size_t
+tab_close_count(const struct wl_window *win, enum tab_close_scope scope)
+{
+    size_t count = 0;
+    bool after_active = false;
+
+    tll_foreach(win->tabs, it) {
+        const struct terminal *tab = it->item;
+        const bool is_active = tab == win->term;
+
+        if (!tab->shutdown.in_progress &&
+            in_close_scope(scope, is_active, after_active))
+        {
+            count++;
+        }
+
+        if (is_active)
+            after_active = true;
+    }
+
+    return count;
+}
+
 void
-tab_request_close_window(struct wl_window *win)
+tab_close(struct wl_window *win, enum tab_close_scope scope)
+{
+    bool after_active = false;
+
+    /* term_shutdown() is asynchronous; the tabs are detached later */
+    tll_foreach(win->tabs, it) {
+        struct terminal *tab = it->item;
+        const bool is_active = tab == win->term;
+
+        if (in_close_scope(scope, is_active, after_active))
+            term_shutdown(tab);
+
+        if (is_active)
+            after_active = true;
+    }
+}
+
+void
+tab_request_close(struct wl_window *win, enum tab_close_scope scope)
 {
     struct terminal *term = win->term;
+    xassert(scope != TAB_CLOSE_NONE);
 
-    if (win->confirm_close ||
-        tll_length(win->tabs) < 2 ||
-        !term->conf->tabs.confirm_close)
+    const bool confirm = scope == TAB_CLOSE_ALL
+        ? term->conf->tabs.confirm_close
+        : term->conf->tabs.confirm_close_multiple;
+
+    /* Requesting the same close while asking, closes immediately */
+    if (!confirm ||
+        win->confirm_close == scope ||
+        tab_close_count(win, scope) < 2)
     {
-        tab_close_all(win);
+        tab_close(win, scope);
         return;
     }
 
@@ -471,14 +583,20 @@ tab_request_close_window(struct wl_window *win)
         search_cancel(term);
     urls_reset(term);
 
-    win->confirm_close = true;
+    win->confirm_close = scope;
     render_refresh(term);
+}
+
+void
+tab_request_close_window(struct wl_window *win)
+{
+    tab_request_close(win, TAB_CLOSE_ALL);
 }
 
 static void
 confirm_close_dismiss(struct wl_window *win)
 {
-    win->confirm_close = false;
+    win->confirm_close = TAB_CLOSE_NONE;
     render_refresh(win->term);
 }
 
@@ -486,14 +604,18 @@ void
 tab_confirm_close_input(struct terminal *term, xkb_keysym_t sym)
 {
     struct wl_window *win = term->window;
-    xassert(win->confirm_close);
+    const enum tab_close_scope scope = win->confirm_close;
+    xassert(scope != TAB_CLOSE_NONE);
 
     switch (sym) {
     case XKB_KEY_y:
     case XKB_KEY_Y:
     case XKB_KEY_Return:
     case XKB_KEY_KP_Enter:
-        tab_close_all(win);
+        /* Unless closing the window, the active tab stays open */
+        if (scope != TAB_CLOSE_ALL)
+            confirm_close_dismiss(win);
+        tab_close(win, scope);
         break;
 
     case XKB_KEY_n:
@@ -502,14 +624,6 @@ tab_confirm_close_input(struct terminal *term, xkb_keysym_t sym)
         confirm_close_dismiss(win);
         break;
     }
-}
-
-void
-tab_close_all(struct wl_window *win)
-{
-    /* term_shutdown() is asynchronous; the tabs are detached later */
-    tll_foreach(win->tabs, it)
-        term_shutdown(it->item);
 }
 
 bool
@@ -537,8 +651,16 @@ tab_detach(struct terminal *term)
     }
 
     if (win->term == term) {
-        /* Like most tabbed applications, prefer the tab to the right */
-        tab_activate_index(win, min(idx, tll_length(win->tabs) - 1));
+        struct terminal *last_used =
+            term->conf->tabs.activate_on_close == TABS_ACTIVATE_ON_CLOSE_LAST_USED
+                ? last_used_tab(win) : NULL;
+
+        if (last_used != NULL)
+            tab_activate(last_used);
+        else {
+            /* Like most tabbed applications, prefer the tab to the right */
+            tab_activate_index(win, min(idx, tll_length(win->tabs) - 1));
+        }
     } else if (!tab_bar_visible(win)) {
         /* The tab bar was hidden; give its space to the grid */
         const struct terminal *active = win->term;
@@ -549,8 +671,16 @@ tab_detach(struct terminal *term)
 
     xassert(win->term != term);
 
-    if (win->confirm_close && tll_length(win->tabs) < 2)
-        confirm_close_dismiss(win);
+    if (win->confirm_close == TAB_CLOSE_ALL) {
+        if (tll_length(win->tabs) < 2)
+            confirm_close_dismiss(win);
+    } else if (win->confirm_close != TAB_CLOSE_NONE) {
+        /* Tabs closed by themselves; update, or drop, the question */
+        if (tab_close_count(win, win->confirm_close) < 2)
+            confirm_close_dismiss(win);
+        else
+            render_refresh(win->term);
+    }
 
     tll_foreach(term->wl->seats, it) {
         xassert(it->item.kbd_focus != term);

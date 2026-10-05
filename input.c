@@ -534,6 +534,38 @@ execute_binding(struct seat *seat, struct terminal *term,
         tab_rename_start(term);
         return true;
 
+    case BIND_ACTION_TAB_FIRST:
+        tab_activate_index(term->window, 0);
+        return true;
+
+    case BIND_ACTION_TAB_LAST:
+        tab_activate_last(term->window);
+        return true;
+
+    case BIND_ACTION_TAB_LAST_USED:
+        tab_activate_last_used(term->window);
+        return true;
+
+    case BIND_ACTION_TAB_MOVE_FIRST:
+        tab_move_to(term->window, 0);
+        return true;
+
+    case BIND_ACTION_TAB_MOVE_LAST:
+        tab_move_last(term->window);
+        return true;
+
+    case BIND_ACTION_TAB_CLOSE_LEFT:
+        tab_request_close(term->window, TAB_CLOSE_LEFT);
+        return true;
+
+    case BIND_ACTION_TAB_CLOSE_RIGHT:
+        tab_request_close(term->window, TAB_CLOSE_RIGHT);
+        return true;
+
+    case BIND_ACTION_TAB_CLOSE_OTHERS:
+        tab_request_close(term->window, TAB_CLOSE_OTHERS);
+        return true;
+
     case BIND_ACTION_TRANSPARENCY_TOGGLE: {
         /* Window-wide, i.e. affects all tabs */
         struct wl_window *win = term->window;
@@ -1696,7 +1728,7 @@ key_press_release(struct seat *seat, struct terminal *term, uint32_t serial,
         seat->wayl->key_binding_manager, term->conf, seat);
     xassert(bindings != NULL);
 
-    if (term->window->confirm_close) {
+    if (term->window->confirm_close != TAB_CLOSE_NONE) {
         if (pressed)
             tab_confirm_close_input(term, sym);
         return;

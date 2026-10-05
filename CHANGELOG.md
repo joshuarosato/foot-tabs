@@ -80,7 +80,10 @@
   `tab-goto-1` .. `tab-goto-9` (default `Control+1` .. `Control+9`),
   `tab-move-left` (default
   `Control+Shift+Prior`), `tab-move-right` (default
-  `Control+Shift+Next`) and `tab-rename`. A tab bar is shown when a
+  `Control+Shift+Next`), `tab-rename`, and (unbound by default)
+  `tab-first`, `tab-last`, `tab-last-used` (toggle between the two
+  most recently used tabs), `tab-move-first`, `tab-move-last`,
+  `tab-close-left`, `tab-close-right` and `tab-close-others`. A tab bar is shown when a
   window has more than one tab; click to switch tab, drag to move it,
   double-click to rename, middle-click to close, and scroll to cycle
   tabs. A window
@@ -99,8 +102,13 @@
   - `confirm-close`: when enabled (the default), closing a window with
     more than one tab asks for confirmation. Previously named
     `[main].confirm-close-tabs` (deprecated, but still accepted).
+  - `confirm-close-multiple`: when enabled (the default), closing
+    more than one tab with `tab-close-left`, `tab-close-right` or
+    `tab-close-others` asks for confirmation.
   - `new-tab-position`: open new tabs after the current tab (the
     default), or after the last tab.
+  - `activate-on-close`: when closing the current tab, switch to the
+    tab to its right (the default), or to the most recently used tab.
   - `shared-font-size`: font size changes apply to all tabs in the
     window (the default), or only the current tab.
 

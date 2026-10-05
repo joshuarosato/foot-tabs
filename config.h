@@ -485,8 +485,14 @@ struct config {
             TABS_NEW_POSITION_LAST,
         } new_position;
 
+        enum {
+            TABS_ACTIVATE_ON_CLOSE_RIGHT,
+            TABS_ACTIVATE_ON_CLOSE_LAST_USED,
+        } activate_on_close;
+
         bool shared_font_size;
         bool confirm_close;
+        bool confirm_close_multiple;
     } tabs;
 
     user_notifications_t notifications;
