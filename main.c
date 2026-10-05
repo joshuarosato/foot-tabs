@@ -709,6 +709,22 @@ out:
     server_destroy(server);
     term_destroy(term);
 
+    /*
+     * When aborted (e.g. SIGTERM), there may be tabs left, that
+     * aren't owned by 'term', or by the server.
+     */
+    if (wayl != NULL) {
+        tll_foreach(wayl->terms, it) {
+            struct terminal *tab = it->item;
+            void (*cb)(void *, int) = tab->shutdown.cb;
+            void *cb_data = tab->shutdown.cb_data;
+
+            int exit_code = term_destroy(tab);
+            if (cb != NULL)
+                cb(cb_data, exit_code);
+        }
+    }
+
     shm_fini();
     render_destroy(renderer);
     wayl_destroy(wayl);
